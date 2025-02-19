@@ -1,5 +1,6 @@
 import { api } from '../lib/api'
 import type { Video } from '@/types/video.types'
+import axios from 'axios'
 
 // Move Video interface to a local definition for now to fix the import error
 export interface Video {
@@ -68,7 +69,19 @@ export const VideoService = {
       const { data } = await api.get<Video>(`/videos/${id}`)
       return data
     } catch (error) {
-      console.error('Error in getVideo:', error)
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        // Remove from processing videos if it's a 404
+        const storedVideos = JSON.parse(localStorage.getItem('processingVideos') || '[]')
+        const updatedVideos = storedVideos.filter((v: any) => v.id !== id)
+        localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
+        
+        // Cache the 404 to prevent further requests
+        const notFoundCache = {
+          id,
+          timestamp: Date.now()
+        }
+        localStorage.setItem(`video_not_found_${id}`, JSON.stringify(notFoundCache))
+      }
       throw error
     }
   },
@@ -110,28 +123,64 @@ export const VideoService = {
     let attempts = 0
 
     const poll = async () => {
-      if (attempts >= maxAttempts) return
+      // Check if already known to not exist
+      const notFoundCache = localStorage.getItem(`video_not_found_${videoId}`)
+      if (notFoundCache) {
+        const { timestamp } = JSON.parse(notFoundCache)
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          // Remove from processing videos if it's cached as not found
+          const storedVideos = JSON.parse(localStorage.getItem('processingVideos') || '[]')
+          const updatedVideos = storedVideos.filter((v: any) => v.id !== videoId)
+          localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
+          return
+        }
+        // Clear old cache
+        localStorage.removeItem(`video_not_found_${videoId}`)
+      }
+
+      if (attempts >= maxAttempts) {
+        // Remove from processing videos after max attempts
+        const storedVideos = JSON.parse(localStorage.getItem('processingVideos') || '[]')
+        const updatedVideos = storedVideos.filter((v: any) => v.id !== videoId)
+        localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
+        return
+      }
 
       try {
         const video = await this.getVideo(videoId)
         
-        if (video.status === 'ready') {
-          // Video is ready, update localStorage
+        if (video.status === 'ready' || video.status === 'failed') {
+          // Video is complete or failed, remove from processing
           const storedVideos = JSON.parse(localStorage.getItem('processingVideos') || '[]')
           const updatedVideos = storedVideos.filter((v: any) => v.id !== videoId)
           localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
           
-          // Dispatch event
-          window.dispatchEvent(new CustomEvent('videoProcessingComplete', {
-            detail: { video }
-          }))
+          if (video.status === 'ready') {
+            window.dispatchEvent(new CustomEvent('videoProcessingComplete', {
+              detail: { video }
+            }))
+          }
           return
         }
 
         attempts++
         setTimeout(poll, 5000) // Poll every 5 seconds
       } catch (error) {
-        console.error('Error polling video status:', error)
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          // Cache the 404 response
+          const notFoundCache = {
+            id: videoId,
+            timestamp: Date.now()
+          }
+          localStorage.setItem(`video_not_found_${videoId}`, JSON.stringify(notFoundCache))
+          
+          // Remove from processing videos
+          const storedVideos = JSON.parse(localStorage.getItem('processingVideos') || '[]')
+          const updatedVideos = storedVideos.filter((v: any) => v.id !== videoId)
+          localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
+          return
+        }
+        
         attempts++
         setTimeout(poll, 5000)
       }

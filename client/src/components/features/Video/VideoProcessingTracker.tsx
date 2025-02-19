@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { VideoService } from '@/services/video.service'
 import { useToast } from '@/components/ui/use-toast'
 import { Bell } from 'lucide-react'
+import axios from 'axios'
 
 interface ProcessingVideo {
   id: string
@@ -92,31 +93,56 @@ export function VideoProcessingTracker() {
           localStorage.getItem('processingVideos') || '[]'
         )
 
-        // Validate stored videos
-        const validVideos = storedVideos.filter(video => 
+        // First, filter out any videos that are already known to not exist
+        const validVideos = storedVideos.filter(video => {
+          const notFoundCache = localStorage.getItem(`video_not_found_${video.id}`)
+          if (notFoundCache) {
+            const { timestamp } = JSON.parse(notFoundCache)
+            // If the cache is less than 5 minutes old, filter out this video
+            if (Date.now() - timestamp < 5 * 60 * 1000) {
+              return false
+            }
+            // Clear old cache
+            localStorage.removeItem(`video_not_found_${video.id}`)
+          }
+          return true
+        })
+
+        // Then apply the other validations
+        const filteredVideos = validVideos.filter(video => 
           video && 
           typeof video.id === 'string' && 
-          video.id.length === 24 && // Validate MongoDB ObjectId length
+          video.id.length === 24 && 
           typeof video.title === 'string' &&
-          typeof video.timestamp === 'string'
+          typeof video.timestamp === 'string' &&
+          // Filter out videos older than 1 hour
+          Date.now() - new Date(video.timestamp).getTime() < 60 * 60 * 1000
         )
 
-        setProcessingVideos(validVideos)
+        // Update localStorage with filtered list
+        localStorage.setItem('processingVideos', JSON.stringify(filteredVideos))
+        setProcessingVideos(filteredVideos)
 
         // Start polling for each valid video
-        validVideos.forEach(video => {
+        filteredVideos.forEach(video => {
           if (!pollingRef.current[video.id]) {
             pollingRef.current[video.id] = true
-            VideoService.pollVideoStatus(video.id).catch(error => {
-              console.error(`Error polling video ${video.id}:`, error)
-              // Remove failed video from processing list
-              setProcessingVideos(prev => 
-                prev.filter(v => v.id !== video.id)
-              )
-              // Update localStorage
-              const updatedVideos = prev.filter(v => v.id !== video.id)
-              localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
-            })
+            VideoService.pollVideoStatus(video.id)
+              .catch(error => {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                  // Remove this video from processing list immediately
+                  const updatedVideos = processingVideos.filter(v => v.id !== video.id)
+                  setProcessingVideos(updatedVideos)
+                  localStorage.setItem('processingVideos', JSON.stringify(updatedVideos))
+                  
+                  // Cache the 404 response
+                  const notFoundCache = {
+                    id: video.id,
+                    timestamp: Date.now()
+                  }
+                  localStorage.setItem(`video_not_found_${video.id}`, JSON.stringify(notFoundCache))
+                }
+              })
           }
         })
       } catch (error) {
