@@ -165,3 +165,29 @@ button:focus-visible {
 .snap-center {
   scroll-snap-align: center;
 }
+
+/* Comment Section Styles */
+.comment-section {
+  @apply fixed top-0 right-0 h-full w-[400px] bg-background border-l shadow-xl z-50;
+}
+
+.comment-overlay {
+  @apply fixed inset-0 bg-black/50 z-40;
+}
+
+/* Scrollbar Styles for Comments */
+.comment-section ::-webkit-scrollbar {
+  width: 6px;
+}
+
+.comment-section ::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.comment-section ::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+.comment-section ::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
