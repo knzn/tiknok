@@ -221,4 +221,66 @@ router.get('/:videoId/comments', getCommentsHandler)
 router.delete('/:videoId/comments/:commentId', typedAuthMiddleware, deleteCommentHandler)
 router.patch('/:videoId/comments/:commentId', typedAuthMiddleware, updateCommentHandler)
 
+// Create typed handlers for delete and update
+const deleteVideoHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    const userId = (req as AuthRequest).user.id
+
+    const video = await VideoModel.findById(videoId)
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    // Check if user owns the video
+    if (video.userId.toString() !== userId) {
+      res.status(403).json({ error: 'Not authorized to delete this video' })
+      return
+    }
+
+    await VideoModel.findByIdAndDelete(videoId)
+    res.status(200).json({ message: 'Video deleted successfully' })
+  } catch (error) {
+    next(error)
+  }
+}
+
+const updateVideoHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    const { title, description } = req.body
+    const userId = (req as AuthRequest).user.id
+
+    const video = await VideoModel.findById(videoId)
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    // Check if user owns the video
+    if (video.userId.toString() !== userId) {
+      res.status(403).json({ error: 'Not authorized to update this video' })
+      return
+    }
+
+    const updatedVideo = await VideoModel.findByIdAndUpdate(
+      videoId,
+      { 
+        ...(title && { title }),
+        ...(description !== undefined && { description })
+      },
+      { new: true }
+    ).populate('userId', 'username profilePicture')
+
+    res.status(200).json(updatedVideo)
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Routes
+router.delete('/:videoId', typedAuthMiddleware, deleteVideoHandler)
+router.patch('/:videoId', typedAuthMiddleware, updateVideoHandler)
+
 export default router 

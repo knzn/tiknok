@@ -287,5 +287,24 @@ export const VideoService = {
   handleCancelEdit: () => {
     setEditingCommentId(null)
     setEditContent('')
+  },
+
+  async deleteVideo(videoId: string): Promise<void> {
+    try {
+      await api.delete(`/videos/${videoId}`)
+    } catch (error) {
+      console.error('Error deleting video:', error)
+      throw error
+    }
+  },
+
+  async updateVideo(videoId: string, data: { title?: string; description?: string }): Promise<Video> {
+    try {
+      const response = await api.patch(`/videos/${videoId}`, data)
+      return response.data
+    } catch (error) {
+      console.error('Error updating video:', error)
+      throw error
+    }
   }
 } 
