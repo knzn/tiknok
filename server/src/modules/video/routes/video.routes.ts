@@ -5,6 +5,9 @@ import { promises as fs } from 'fs'
 import { VideoController } from '../controllers/video.controller'
 import { VideoProcessingService } from '../services/video-processing.service'
 import { authMiddleware } from '../../../middleware/auth'
+import { VideoModel } from '../models/video.model'
+import { CommentModel } from '../models/comment.model'
+import { AuthRequest } from '../../auth/types/auth.types'
 
 // Create temp upload directory
 const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp')
@@ -51,15 +54,99 @@ const router = Router()
 const videoProcessingService = new VideoProcessingService()
 const videoController = new VideoController(videoProcessingService)
 
+// Cast auth middleware to RequestHandler
+const typedAuthMiddleware = authMiddleware as RequestHandler
+
+// Comment handlers with proper typing
+const addCommentHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    const { content } = req.body
+    const authReq = req as AuthRequest
+    const userId = authReq.user.id
+
+    const video = await VideoModel.findById(videoId)
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    const comment = await CommentModel.create({
+      content,
+      videoId,
+      userId
+    })
+
+    await comment.populate('userId', 'username profilePicture')
+    res.status(201).json(comment)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getCommentsHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    
+    const comments = await CommentModel.find({ videoId })
+      .populate('userId', 'username profilePicture')
+      .sort({ createdAt: -1 })
+      .limit(100)
+
+    res.json(comments)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const deleteCommentHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId, commentId } = req.params
+    const userId = (req as AuthRequest).user.id
+
+    const comment = await CommentModel.findById(commentId)
+    if (!comment) {
+      res.status(404).json({ error: 'Comment not found' })
+      return
+    }
+
+    // Check if user owns the comment
+    if (comment.userId.toString() !== userId) {
+      res.status(403).json({ error: 'Not authorized to delete this comment' })
+      return
+    }
+
+    await CommentModel.findByIdAndDelete(commentId)
+    res.status(200).json({ message: 'Comment deleted successfully' })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Cast controller methods to RequestHandler
+const uploadHandler: RequestHandler = async (req, res, next) => {
+  try {
+    await videoController.upload(req as AuthRequest, res)
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Routes
 router.post(
-  '/upload', 
-  authMiddleware as RequestHandler, 
-  upload.single('video'), 
-  videoController.upload as RequestHandler
+  '/upload',
+  typedAuthMiddleware,
+  upload.single('video'),
+  uploadHandler
 )
 
 router.get('/', videoController.getVideos as RequestHandler)
 router.get('/top/:type', videoController.getTopVideos as RequestHandler)
 router.get('/:id', videoController.getVideo as RequestHandler)
+
+// Comment routes
+router.post('/:videoId/comments', typedAuthMiddleware, addCommentHandler)
+router.get('/:videoId/comments', getCommentsHandler)
+router.delete('/:videoId/comments/:commentId', typedAuthMiddleware, deleteCommentHandler)
 
 export default router 

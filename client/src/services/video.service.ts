@@ -55,6 +55,28 @@ interface VideoUploadResponse {
   aspectRatio?: number
 }
 
+interface ApiComment {
+  _id: string
+  content: string
+  userId: {
+    _id: string
+    username: string
+    profilePicture?: string
+  }
+  createdAt: string
+}
+
+const transformComment = (comment: ApiComment): Comment => ({
+  id: comment._id,
+  content: comment.content,
+  userId: {
+    id: comment.userId._id,
+    username: comment.userId.username,
+    profilePicture: comment.userId.profilePicture
+  },
+  createdAt: comment.createdAt
+})
+
 export const VideoService = {
   async getVideos(params?: { page?: number, limit?: number }): Promise<VideoResponse> {
     const { data } = await api.get<VideoResponse>('/videos', { params })
@@ -197,7 +219,60 @@ export const VideoService = {
     await api.delete(`/videos/${id}/like`)
   },
 
-  async addComment(id: string, content: string): Promise<void> {
-    await api.post(`/videos/${id}/comments`, { content })
+  async getVideoComments(videoId: string): Promise<Comment[]> {
+    try {
+      const { data } = await api.get<ApiComment[]>(`/videos/${videoId}/comments`)
+      return data.map(comment => ({
+        id: comment._id,
+        content: comment.content,
+        userId: {
+          id: comment.userId._id,
+          username: comment.userId.username,
+          profilePicture: comment.userId.profilePicture
+        },
+        createdAt: comment.createdAt
+      }))
+    } catch (error) {
+      console.error('Error fetching comments:', error)
+      return []
+    }
+  },
+
+  async addComment(videoId: string, content: string): Promise<Comment> {
+    const { data } = await api.post(`/videos/${videoId}/comments`, { content })
+    return {
+      id: data._id,
+      content: data.content,
+      userId: {
+        id: data.userId._id,
+        username: data.userId.username,
+        profilePicture: data.userId.profilePicture
+      },
+      createdAt: data.createdAt
+    }
+  },
+
+  async updateComment(videoId: string, commentId: string, content: string): Promise<Comment> {
+    const { data } = await api.patch(`/api/videos/${videoId}/comments/${commentId}`, { content })
+    return {
+      id: data._id,
+      content: data.content,
+      userId: {
+        id: data.userId._id,
+        username: data.userId.username,
+        profilePicture: data.userId.profilePicture
+      },
+      createdAt: data.createdAt
+    }
+  },
+
+  async deleteComment(videoId: string, commentId: string): Promise<void> {
+    try {
+      await api.delete(`/videos/${videoId}/comments/${commentId}`)
+      console.log('Comment deleted successfully')
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      throw error
+    }
   }
 } 

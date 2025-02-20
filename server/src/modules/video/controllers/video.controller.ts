@@ -1,9 +1,10 @@
 import { Request, Response } from 'express'
 import { VideoProcessingService } from '../services/video-processing.service'
 import { VideoModel } from '../models/video.model'
-import { AuthRequest } from '../../../middleware/auth'
+import { AuthRequest } from '../../auth/types/auth.types'
 import multer from 'multer'
 import path from 'path'
+import { CommentModel } from '../models/comment.model'
 
 const storage = multer.diskStorage({
   destination: 'uploads/temp',
@@ -147,6 +148,71 @@ export class VideoController {
       res.json(videos)
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  }
+
+  async addComment(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { videoId } = req.params
+      const { content } = req.body
+      const userId = req.user.id
+
+      const video = await VideoModel.findById(videoId)
+      if (!video) {
+        return res.status(404).json({ error: 'Video not found' })
+      }
+
+      const comment = await CommentModel.create({
+        content,
+        videoId,
+        userId
+      })
+
+      await comment.populate('userId', 'username profilePicture')
+
+      return res.status(201).json(comment)
+    } catch (error) {
+      console.error('Error adding comment:', error)
+      return res.status(500).json({ error: 'Failed to add comment' })
+    }
+  }
+
+  async getComments(req: Request, res: Response): Promise<Response> {
+    try {
+      const { videoId } = req.params
+      
+      const comments = await CommentModel.find({ videoId })
+        .populate('userId', 'username profilePicture')
+        .sort({ createdAt: -1 })
+        .limit(100)
+
+      return res.json(comments)
+    } catch (error) {
+      console.error('Error fetching comments:', error)
+      return res.status(500).json({ error: 'Failed to fetch comments' })
+    }
+  }
+
+  async deleteComment(req: AuthRequest, res: Response): Promise<Response> {
+    try {
+      const { videoId, commentId } = req.params
+      const userId = req.user.id
+
+      const comment = await CommentModel.findById(commentId)
+      if (!comment) {
+        return res.status(404).json({ error: 'Comment not found' })
+      }
+
+      // Check if user owns the comment
+      if (comment.userId.toString() !== userId) {
+        return res.status(403).json({ error: 'Not authorized to delete this comment' })
+      }
+
+      await CommentModel.findByIdAndDelete(commentId)
+      return res.status(200).json({ message: 'Comment deleted successfully' })
+    } catch (error) {
+      console.error('Error deleting comment:', error)
+      return res.status(500).json({ error: 'Failed to delete comment' })
     }
   }
 } 
