@@ -253,16 +253,24 @@ export const VideoService = {
   },
 
   async updateComment(videoId: string, commentId: string, content: string): Promise<Comment> {
-    const { data } = await api.patch(`/api/videos/${videoId}/comments/${commentId}`, { content })
-    return {
-      id: data._id,
-      content: data.content,
-      userId: {
-        id: data.userId._id,
-        username: data.userId.username,
-        profilePicture: data.userId.profilePicture
-      },
-      createdAt: data.createdAt
+    try {
+      const { data } = await api.patch(`/videos/${videoId}/comments/${commentId}`, { 
+        content: content.trim() 
+      })
+      
+      return {
+        id: data._id || data.id,
+        content: data.content,
+        userId: {
+          id: data.userId._id || data.userId.id,
+          username: data.userId.username,
+          profilePicture: data.userId.profilePicture
+        },
+        createdAt: data.createdAt
+      }
+    } catch (error) {
+      console.error('Error in updateComment:', error)
+      throw error
     }
   },
 
@@ -274,5 +282,10 @@ export const VideoService = {
       console.error('Error deleting comment:', error)
       throw error
     }
+  },
+
+  handleCancelEdit: () => {
+    setEditingCommentId(null)
+    setEditContent('')
   }
 } 

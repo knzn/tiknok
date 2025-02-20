@@ -29,7 +29,11 @@ interface User {
 interface Comment {
   id: string
   content: string
-  userId: User
+  userId: {
+    id: string
+    username: string
+    profilePicture?: string
+  }
   createdAt: string
 }
 
@@ -50,7 +54,27 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
   // Hooks
   const { user } = useAuthStore()
   const { toast } = useToast()
-  const { register, handleSubmit, reset, setValue } = useForm<{ content: string }>()
+  const {
+    register: registerComment,
+    handleSubmit: handleCommentSubmit,
+    reset: resetComment,
+  } = useForm<{ content: string }>({
+    defaultValues: {
+      content: ''
+    }
+  })
+
+  // Add separate form for editing
+  const {
+    register: registerEdit,
+    handleSubmit: handleEditSubmit,
+    reset: resetEdit,
+    watch: watchEdit
+  } = useForm<{ content: string }>({
+    defaultValues: {
+      content: ''
+    }
+  })
 
   // Debug logging
   useEffect(() => {
@@ -110,7 +134,7 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
       }
       
       setComments(prev => [optimisticComment, ...prev])
-      reset()
+      resetComment()
       
       // API call
       const newComment = await VideoService.addComment(videoId, data.content)
@@ -138,42 +162,16 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
 
   // Edit comment handlers
   const handleEdit = (comment: Comment) => {
-    console.log('Editing comment:', comment)
+    console.log('Starting edit for comment:', comment)
     setEditingCommentId(comment.id)
-    setValue('content', comment.content)
+    // Set the edit form value
+    resetEdit({ content: comment.content })
   }
 
   const handleCancelEdit = () => {
+    console.log('Canceling edit')
     setEditingCommentId(null)
-    reset()
-  }
-
-  const handleUpdateComment = async (commentId: string, content: string) => {
-    try {
-      setIsLoading(true)
-      const updatedComment = await VideoService.updateComment(videoId, commentId, content)
-      
-      setComments(prev => 
-        prev.map(comment => 
-          comment.id === commentId ? updatedComment : comment
-        )
-      )
-      
-      setEditingCommentId(null)
-      toast({
-        title: "Success",
-        description: "Comment updated successfully"
-      })
-    } catch (error) {
-      console.error('Failed to update comment:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update comment",
-        variant: "destructive"
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    resetEdit() // Reset edit form
   }
 
   // Delete comment handler
@@ -243,7 +241,7 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setEditingCommentId(comment.id)}
+                  onClick={() => handleEdit(comment)}
                   className="text-gray-600 hover:text-gray-900"
                 >
                   <Pencil className="h-4 w-4" />
@@ -263,24 +261,66 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
           </div>
 
           {isEditing ? (
-            <form onSubmit={handleSubmit((data) => handleUpdateComment(comment.id, data.content))}>
-              <Textarea
-                {...register('content')}
-                defaultValue={comment.content}
-                className="mt-2"
-              />
-              <div className="flex justify-end gap-2 mt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingCommentId(null)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm">
-                  Save
-                </Button>
+            <form onSubmit={handleEditSubmit(async (data) => {
+              if (!data.content.trim()) return
+              
+              try {
+                setIsLoading(true)
+                const updatedComment = await VideoService.updateComment(
+                  videoId, 
+                  comment.id, 
+                  data.content.trim()
+                )
+                
+                setComments(prev => 
+                  prev.map(c => c.id === comment.id ? updatedComment : c)
+                )
+                
+                handleCancelEdit()
+                toast({
+                  title: "Success",
+                  description: "Comment updated successfully"
+                })
+              } catch (error) {
+                console.error('Failed to update comment:', error)
+                toast({
+                  title: "Error",
+                  description: "Failed to update comment",
+                  variant: "destructive"
+                })
+              } finally {
+                setIsLoading(false)
+              }
+            })}>
+              <div className="space-y-2">
+                <Textarea
+                  {...registerEdit('content', {
+                    required: 'Comment cannot be empty',
+                    validate: value => value.trim() !== '' || 'Comment cannot be empty'
+                  })}
+                  placeholder="Edit your comment..."
+                  className="min-h-[80px] w-full"
+                  disabled={isLoading}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    size="sm"
+                    disabled={isLoading || watchEdit('content')?.trim() === comment.content.trim()}
+                  >
+                    {isLoading ? <LoadingSpinner size={16} /> : 'Save'}
+                  </Button>
+                </div>
               </div>
             </form>
           ) : (
@@ -335,10 +375,10 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
               </div>
 
               {/* Comment Form */}
-              <form onSubmit={handleSubmit(onSubmit)} className="p-4 border-t">
+              <form onSubmit={handleCommentSubmit(onSubmit)} className="p-4 border-t">
                 <div className="flex gap-2">
                   <Textarea
-                    {...register('content', { required: true })}
+                    {...registerComment('content', { required: true })}
                     placeholder="Write a comment..."
                     className="flex-1"
                     disabled={isLoading || !user}
