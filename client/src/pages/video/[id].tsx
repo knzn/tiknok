@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { VideoDetail } from '@/components/features/Video/VideoDetail'
-
+import { VideoDetail } from '../../components/features/Video/VideoDetail'
+  
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
 

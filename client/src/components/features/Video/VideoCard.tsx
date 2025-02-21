@@ -36,6 +36,9 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
       <div className="absolute bottom-20 left-4 right-16 z-10">
         <h3 className="text-white text-lg font-semibold line-clamp-2">{video.title}</h3>
         <div className="mt-2 flex items-center text-white/80 text-sm">
+          <span>{video.views?.toLocaleString() || 0} reactions</span>
+        </div>
+        <div className="mt-2 flex items-center text-white/80 text-sm">
           <span>{video.views?.toLocaleString() || 0} views</span>
         </div>
       </div>
