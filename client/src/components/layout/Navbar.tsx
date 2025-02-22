@@ -45,7 +45,8 @@ export function Navbar() {
               </Button>
 
               <Button 
-                variant="ghost" 
+                type="button"
+                variant="outline" 
                 onClick={handleLogout}
                 className="flex items-center space-x-2"
               >

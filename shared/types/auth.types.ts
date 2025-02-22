@@ -6,6 +6,11 @@ export const UserSchema = z.object({
   username: z.string().min(3).max(50),
   password: z.string().min(6),
   profilePicture: z.string().optional(),
+  coverPhoto: z.string().optional(),
+  gamefarmName: z.string().optional(),
+  address: z.string().optional(),
+  contactNumber: z.string().optional(),
+  facebookProfile: z.string().optional(),
   role: z.enum(['USER', 'ADMIN']).default('USER'),
   createdAt: z.date(),
   updatedAt: z.date()

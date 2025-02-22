@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import authRoutes from './modules/auth/routes/auth.routes'
 import videoRoutes from './modules/video/routes/video.routes'
+import { userRoutes } from './modules/user/routes/user.routes'
 import { connectDatabase } from './config/database'
 import { config } from './config/environment'
 import path from 'path'
@@ -43,7 +44,7 @@ const limiter = rateLimit({
 app.use(limiter)
 
 // Ensure upload directories exist
-const uploadDirs = ['uploads', 'uploads/temp'].map(dir => 
+const uploadDirs = ['uploads', 'uploads/temp', 'uploads/profiles'].map(dir => 
   path.join(__dirname, '..', dir)
 )
 uploadDirs.forEach(dir => {
@@ -74,6 +75,7 @@ app.use('/thumbnails', express.static(path.join(__dirname, '../public/thumbnails
 // Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/videos', videoRoutes)
+app.use('/api/users', userRoutes)
 
 // Apply rate limiting to all routes
 app.use(apiLimiter)

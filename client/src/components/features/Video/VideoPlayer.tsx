@@ -26,7 +26,6 @@ export function VideoPlayer({
     if (!video || !src) return
 
     const isHLSSource = src.includes('.m3u8')
-    console.log('Video source:', src, 'Is HLS:', isHLSSource)
     
     if (isHLSSource && Hls.isSupported()) {
       if (hlsRef.current) {
@@ -38,18 +37,15 @@ export function VideoPlayer({
         debug: true, // Enable debug logs
         xhrSetup: (xhr, url) => {
           // Log XHR requests
-          console.log('HLS XHR request:', url)
         }
       })
 
       hls.attachMedia(video)
       hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-        console.log('HLS: Media attached')
         hls.loadSource(src)
       })
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log('HLS: Manifest parsed')
         setIsLoading(false)
         if (autoPlay) {
           video.play().catch(console.error)
@@ -85,8 +81,11 @@ export function VideoPlayer({
 
   return (
     <div 
-      className="relative w-full bg-black rounded-lg overflow-hidden"
-      style={{ aspectRatio: aspectRatio }}
+      className="relative w-full bg-black overflow-hidden"
+      style={{ 
+        aspectRatio: '16/9', // Force 16:9 aspect ratio like YouTube
+        maxHeight: 'calc(100vh - 169px)' // YouTube's max height calculation
+      }}
     >
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">

@@ -6,7 +6,7 @@ export function VideoPage() {
 
   
   return (
-    <div className="container max-w-4xl mx-auto py-10">
+    <div className="w-full max-w-4xl mx-auto py-10 px-6">
       <VideoDetail videoId={id!} />
       
     </div>

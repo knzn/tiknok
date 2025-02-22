@@ -131,7 +131,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   if (!video) {
     return <div>Video not found</div>
   }
-
+  console.log(video)
   return (
     <div className="space-y-4">
       {/* Video Container */}
@@ -236,7 +236,8 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
               </>
             )}
           </div>
-            <h1 className="text-2xl font-bold">{video.title}</h1>
+            <h1 className="text-2xl font-bold">{video.userId.username}</h1>
+            <h1 className="text-2xl font-bold">Title: {video.title}</h1>
             <div className="flex items-center mt-2 space-x-4">
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">

@@ -1,26 +1,26 @@
 import mongoose from 'mongoose'
-import { User } from '@video-app/shared/types/auth.types'
+import bcrypt from 'bcryptjs'
 
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  displayName: { type: String, default: null },
   profilePicture: { type: String },
-  role: { type: String, enum: ['USER', 'ADMIN'], default: 'USER' },
-}, { timestamps: true })
+  coverPhoto: { type: String },
+  gamefarmName: { type: String },
+  address: { type: String },
+  contactNumber: { type: String },
+  facebookProfile: { type: String },
+  role: { type: String, enum: ['USER', 'ADMIN'], default: 'USER' }
+}, {
+  timestamps: true
+})
 
-// Add indexes
-userSchema.index({ email: 1 }, { unique: true })
-userSchema.index({ username: 1 }, { unique: true })
-userSchema.index({ displayName: 1 }, { unique: false }) // Remove unique constraint on displayName
-
-// Add pre-save middleware to set displayName
-userSchema.pre('save', function(next) {
-  if (!this.displayName) {
-    this.displayName = this.username
+userSchema.pre('save', async function(next) {
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10)
   }
   next()
 })
 
-export const UserModel = mongoose.model<User>('User', userSchema) 
+export const UserModel = mongoose.model('User', userSchema)

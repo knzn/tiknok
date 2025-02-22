@@ -13,11 +13,11 @@ export function MainLayout({ children, showSidebar = true }: MainLayoutProps) {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <div className="flex-1 pt-16">
-        <div className="container flex">
+        <div className="flex w-full h-full">
           {showSidebar && (
             <Sidebar className="hidden md:block" />
           )}
-          <main className="flex-1 px-4 md:px-6 py-6">
+          <main className={`flex-1 flex items-center justify-center ${showSidebar ? 'md:ml-80' : ''}`}>
             {children}
           </main>
         </div>

@@ -22,7 +22,7 @@ async function shutdown(signal: string) {
     server.close(() => {
       console.log('HTTP server closed')
       
-      // Close database connection - fixed mongoose.connection.close() call
+      // Close database connection
       mongoose.connection.close().then(() => {
         console.log('MongoDB connection closed')
         process.exit(0)

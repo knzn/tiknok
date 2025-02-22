@@ -20,7 +20,6 @@ export const VideoPage = () => {
         setLoading(true)
         setError(null)
         const data = await VideoService.getVideo(id!)
-        console.log('Fetched video data:', data)
         
         if (mounted && data) {
           setVideo(data)
@@ -54,32 +53,24 @@ export const VideoPage = () => {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
+      <div className="w-full h-screen flex items-center justify-center">
         <LoadingSpinner />
       </div>
     )
   }
 
-  if (error) {
+  if (error || !video) {
     return (
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="text-red-500">{error}</div>
-      </div>
-    )
-  }
-
-  if (!video) {
-    return (
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="text-red-500">Video not found</div>
+      <div className="w-full h-screen flex items-center justify-center">
+        <div className="text-red-500">{error || 'Video not found'}</div>
       </div>
     )
   }
 
   if (video.status === 'processing') {
     return (
-      <div className="max-w-4xl mx-auto p-4">
-        <div className="bg-blue-50 p-4 rounded-lg">
+      <div className="w-full h-screen flex items-center justify-center">
+        <div className="w-full max-w-4xl mx-4 bg-blue-50 p-4 rounded-lg">
           <h2 className="text-xl font-semibold mb-2">{video.title}</h2>
           <div className="flex items-center space-x-2">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
@@ -91,34 +82,33 @@ export const VideoPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <VideoPlayer 
-        src={video.hlsUrl} 
-        poster={video.thumbnailUrl}
-        aspectRatio={video.aspectRatio || 16/9}
-        autoPlay
-      />
-      <div className="mt-4">
-        <h1 className="text-2xl font-bold">{video.title}</h1>
-        <div className="flex items-center mt-2 space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">
-              By {video.userId.username}
-            </span>
-            <span>•</span>
-            <span className="text-sm text-gray-600">
-              {video.views?.toLocaleString() || 0} views
-            </span>
-          </div>
+    <div className="w-full min-h-screen bg-black">
+      <div className="w-full max-w-[1280px] mx-auto">
+        <div className="w-full aspect-video">
+          <VideoPlayer 
+            src={video.hlsUrl} 
+            poster={video.thumbnailUrl}
+            aspectRatio={video.aspectRatio || 16/9}
+            autoPlay
+          />
         </div>
-        {video.description && (
-          <p className="mt-4 text-gray-600">{video.description}</p>
-        )}
-        {video.quality && video.quality.length > 0 && (
-          <div className="mt-2 text-sm text-gray-500">
-            Available in: {video.quality.join(', ')}
+        <div className="mt-6 text-white px-4">
+          <h1 className="text-xl md:text-2xl font-bold">{video.title}</h1>
+          <div className="flex flex-wrap items-center mt-4 gap-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-300">
+                By {video.userId.username}
+              </span>
+              <span className="text-gray-500">•</span>
+              <span className="text-sm text-gray-300">
+                {video.views?.toLocaleString() || 0} views
+              </span>
+            </div>
           </div>
-        )}
+          {video.description && (
+            <p className="mt-4 text-gray-300">{video.description}</p>
+          )}
+        </div>
       </div>
     </div>
   )
