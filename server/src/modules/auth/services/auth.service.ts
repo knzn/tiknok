@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { UserModel } from '../../user/models/user.model'
 import { config } from '../../../config/environment'
@@ -18,11 +18,13 @@ export class AuthService {
       }
 
       const hashedPassword = await bcrypt.hash(data.password, 10)
+      
+      // Set displayName to username if not provided
       const user = await UserModel.create({
         email: data.email,
         username: data.username,
         password: hashedPassword,
-        displayName: data.username
+        displayName: data.username // Changed from data.username to ensure displayName is set
       })
 
       const token = jwt.sign(
@@ -48,6 +50,9 @@ export class AuthService {
           }
           if ((error as any).keyPattern?.username) {
             throw new Error('Username already taken')
+          }
+          if ((error as any).keyPattern?.displayName) {
+            throw new Error('Display name already taken')
           }
         }
       }

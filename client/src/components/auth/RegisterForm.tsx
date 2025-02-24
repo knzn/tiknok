@@ -27,7 +27,7 @@ export function RegisterForm() {
       setLoading(true)
       const { confirmPassword, ...registerData } = data
       console.log('Sending register data:', registerData)
-      await AuthService.register(registerData)
+      const response = await AuthService.register(registerData)
       toast({
         title: "Success!",
         description: "Registration successful. Please log in.",
@@ -35,10 +35,21 @@ export function RegisterForm() {
       navigate('/login')
     } catch (error: any) {
       console.error('Register error:', error)
+      // Extract the error message from the response if available
+      const errorMessage = error.response?.data?.error || error.message || 'Registration failed'
+      const errorCode = error.response?.data?.code || ''
+      
+      let description = errorMessage
+      if (errorCode === 'EMAIL_EXISTS') {
+        description = 'This email is already registered'
+      } else if (errorCode === 'USERNAME_EXISTS') {
+        description = 'This username is already taken'
+      }
+      
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.response?.data?.error || error.message || 'Registration failed'
+        description
       })
     } finally {
       setLoading(false)
@@ -80,6 +91,9 @@ export function RegisterForm() {
         {errors.password && (
           <p className="text-sm text-destructive mt-1">{errors.password.message}</p>
         )}
+        <p className="text-sm text-muted-foreground mt-1">
+          Password must contain at least one uppercase letter, one lowercase letter, and one number
+        </p>
       </div>
 
       <div>
