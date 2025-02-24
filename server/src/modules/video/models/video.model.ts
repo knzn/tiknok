@@ -15,6 +15,7 @@ interface IVideo {
     width: number
     height: number
   }
+  views: number
 }
 
 const videoSchema = new Schema<IVideo>(
@@ -34,6 +35,10 @@ const videoSchema = new Schema<IVideo>(
       type: String,
       enum: ['processing', 'ready', 'failed'],
       default: 'processing'
+    },
+    views: {
+      type: Number,
+      default: 0
     }
   },
   { timestamps: true }

@@ -9,11 +9,12 @@ import { queryClient } from './lib/react-query'
 import Home from './pages/index'
 import { LoginPage } from './pages/Login'
 import { RegisterPage } from './pages/Register'
-import { UploadPage } from './pages/Upload'
-import { ProfilePage } from './pages/Profile'
+import { UploadPage } from './pages/upload'
+import { ProfilePage } from './pages/profile'
 import { VideoPage } from './pages/video/[id]'
 import { NotFoundPage } from './pages/404'
 import { ShortsPage } from './pages/shorts/[id]'
+import Trending from './pages/Trending'
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
             <Route path="/profile/:username" element={<ProfilePage />} />
             <Route path="/video/:id" element={<VideoPage />} />
             <Route path="/shorts/:id" element={<ShortsPage />} />
+            <Route path="/trending" element={<Trending />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
           <Toaster />

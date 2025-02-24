@@ -1,24 +1,25 @@
 export interface Video {
   id: string
+  _id?: string
   title: string
   description?: string
-  url: string
   hlsUrl: string
   thumbnailUrl?: string
   duration?: number
-  userId: string
-  views: number
+  userId: {
+    _id: string
+    username: string
+    profilePicture?: string
+  }
+  views?: number
   likes?: number
+  dislikes?: number
   comments?: number
-  status: 'processing' | 'ready' | 'public' | 'private'
+  status: 'processing' | 'ready' | 'failed' | 'public' | 'private'
   category?: string
   tags?: string[]
+  quality?: string[]
   createdAt: string
   updatedAt: string
   aspectRatio?: number
-  quality?: string[]
-  user?: {
-    id: string
-    username: string
-  }
-} 
+}

@@ -106,10 +106,20 @@ const getCommentsHandler: RequestHandler = async (req, res, next) => {
   try {
     const { videoId } = req.params
     
-    const comments = await CommentModel.find({ videoId })
-      .populate('userId', 'username profilePicture')
-      .sort({ createdAt: -1 })
-      .limit(100)
+    const comments = await CommentModel.find({ 
+      videoId,
+      parentId: null // Get only top-level comments
+    })
+    .populate('userId', 'username profilePicture')
+    .populate({
+      path: 'replies',
+      populate: {
+        path: 'userId',
+        select: 'username profilePicture'
+      }
+    })
+    .sort({ createdAt: -1 })
+    .limit(100)
 
     res.json(comments)
   } catch (error) {
@@ -199,21 +209,43 @@ const uploadHandler: RequestHandler = async (req, res, next) => {
   try {
     await videoController.upload(req as AuthRequest, res)
   } catch (error) {
+    console.error('Upload error:', error)
     next(error)
   }
 }
 
-// Routes
-router.post(
-  '/upload',
-  typedAuthMiddleware,
-  upload.single('video'),
-  uploadHandler
-)
+// Add logging middleware
+router.use((req, res, next) => {
+  console.log('Video route hit:', req.method, req.url)
+  next()
+})
 
-router.get('/', videoController.getVideos as RequestHandler)
-router.get('/top/:type', videoController.getTopVideos as RequestHandler)
+// Define all handlers at the top of the file
+const getTopVideosHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { type } = req.params
+    console.log('Getting top videos for type:', type)
+    
+    if (!['liked', 'viewed', 'commented'].includes(type)) {
+      console.log('Invalid type:', type)
+      res.status(400).json({ error: 'Invalid type parameter' })
+      return
+    }
+    
+    await videoController.getTopVideos(req, res)
+  } catch (error) {
+    console.error('Error in getTopVideosHandler:', error)
+    next(error)
+  }
+}
+
+// Make sure routes are in the correct order
+router.get('/top/:type', getTopVideosHandler)  // This must come before /:id
 router.get('/:id', videoController.getVideo as RequestHandler)
+router.get('/', videoController.getVideos as RequestHandler)
+
+// Upload route
+router.post('/upload', typedAuthMiddleware, upload.single('video'), uploadHandler)
 
 // Comment routes
 router.post('/:videoId/comments', typedAuthMiddleware, addCommentHandler)
@@ -282,5 +314,74 @@ const updateVideoHandler: RequestHandler = async (req, res, next) => {
 // Routes
 router.delete('/:videoId', typedAuthMiddleware, deleteVideoHandler)
 router.patch('/:videoId', typedAuthMiddleware, updateVideoHandler)
+
+// Replace the problematic route with this properly typed handler
+const addViewHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    const userId = (req as AuthRequest).user?.id
+
+    const video = await VideoModel.findById(videoId)
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    // Increment views count and get updated document
+    const updatedVideo = await VideoModel.findByIdAndUpdate(
+      videoId,
+      { $inc: { views: 1 } },
+      { new: true } // This option returns the updated document
+    )
+
+    res.status(200).json({ 
+      message: 'View counted successfully',
+      views: updatedVideo?.views || 0
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Update the route registration
+router.post('/:videoId/view', typedAuthMiddleware, addViewHandler)
+
+// Add new route handler for replies
+const addReplyHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId, commentId } = req.params
+    const { content } = req.body
+    const authReq = req as AuthRequest
+    const userId = authReq.user.id
+
+    const parentComment = await CommentModel.findById(commentId)
+    if (!parentComment) {
+      res.status(404).json({ error: 'Parent comment not found' })
+      return
+    }
+
+    const reply = await CommentModel.create({
+      content,
+      videoId,
+      userId,
+      parentId: commentId
+    })
+
+    await reply.populate('userId', 'username profilePicture')
+    
+    // Add reply to parent comment's replies array
+    await CommentModel.findByIdAndUpdate(
+      commentId,
+      { $push: { replies: reply._id } }
+    )
+
+    res.status(201).json(reply)
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Add route for replies
+router.post('/:videoId/comments/:commentId/replies', typedAuthMiddleware, addReplyHandler)
 
 export default router 

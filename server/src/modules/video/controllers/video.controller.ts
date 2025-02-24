@@ -2,9 +2,23 @@ import { Request, Response } from 'express'
 import { VideoProcessingService } from '../services/video-processing.service'
 import { VideoModel } from '../models/video.model'
 import { AuthRequest } from '../../auth/types/auth.types'
+import { Document } from 'mongoose'
 import multer from 'multer'
 import path from 'path'
 import { CommentModel } from '../models/comment.model'
+import { FollowModel } from '../../user/models/follow.model'
+
+interface UserDocument extends Document {
+  _id: string;
+  username: string;
+  profilePicture?: string;
+}
+
+interface VideoDocument extends Document {
+  userId: UserDocument;
+  title: string;
+  description?: string;
+}
 
 const storage = multer.diskStorage({
   destination: 'uploads/temp',
@@ -77,31 +91,37 @@ export class VideoController {
 
   getVideo = async (req: Request, res: Response): Promise<void> => {
     try {
-      const video = await VideoModel.findById(req.params.id)
-        .populate('userId', 'username profilePicture')
+      const { id } = req.params
       
+      const video = await VideoModel.findById(id)
+        .populate<{ userId: UserDocument }>('userId', 'username profilePicture')
+
       if (!video) {
-        console.log('Video not found:', req.params.id)
         res.status(404).json({ error: 'Video not found' })
         return
       }
 
-      console.log('Found video:', JSON.stringify(video, null, 2))
-      
-      // Convert _id to id in response
-      const videoData = video.toJSON()
+      // Get follower count for video owner
+      const followersCount = await FollowModel.countDocuments({ 
+        following: video.userId._id.toString() 
+      })
+
+      // Format response with followers count
+      const videoJson = video.toJSON()
+      const userJson = video.userId.toJSON()
+
       const response = {
-        ...videoData,
-        id: videoData._id,
-        hlsUrl: videoData.hlsUrl || null,
-        thumbnailUrl: videoData.thumbnailUrl || null
+        ...videoJson,
+        userId: {
+          ...userJson,
+          followersCount
+        }
       }
-      
-      console.log('Sending response:', JSON.stringify(response, null, 2))
+
       res.json(response)
     } catch (error) {
-      console.error('Error getting video:', error)
-      res.status(400).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+      console.error('Get video error:', error)
+      res.status(500).json({ error: 'Failed to get video' })
     }
   }
 
@@ -120,34 +140,168 @@ export class VideoController {
   getTopVideos = async (req: Request, res: Response): Promise<void> => {
     try {
       const { type } = req.params
-      let query = {}
-      
+      const limit = 20
+
+      let videos
+
       switch (type) {
-        case 'likes':
-          query = { likes: { $exists: true } }
+        case 'liked':
+          // Get videos with most likes
+          videos = await VideoModel.aggregate([
+            {
+              $lookup: {
+                from: 'likes',
+                localField: '_id',
+                foreignField: 'videoId',
+                as: 'likes'
+              }
+            },
+            {
+              $addFields: {
+                likes: { $size: '$likes' }
+              }
+            },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'userId',
+                foreignField: '_id',
+                as: 'userDetails'
+              }
+            },
+            { $unwind: '$userDetails' },
+            { $sort: { likes: -1 } },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                description: 1,
+                thumbnailUrl: 1,
+                hlsUrl: 1,
+                views: 1,
+                likes: 1,
+                createdAt: 1,
+                userId: {
+                  _id: '$userDetails._id',
+                  username: '$userDetails.username',
+                  profilePicture: '$userDetails.profilePicture'
+                }
+              }
+            }
+          ])
           break
-        case 'views':
-          query = { views: { $exists: true } }
+
+        case 'viewed':
+          // Get most viewed videos
+          videos = await VideoModel.aggregate([
+            {
+              $lookup: {
+                from: 'likes',
+                localField: '_id',
+                foreignField: 'videoId',
+                as: 'likes'
+              }
+            },
+            {
+              $addFields: {
+                likes: { $size: '$likes' }
+              }
+            },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'userId',
+                foreignField: '_id',
+                as: 'userDetails'
+              }
+            },
+            { $unwind: '$userDetails' },
+            { $sort: { views: -1 } },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                description: 1,
+                thumbnailUrl: 1,
+                hlsUrl: 1,
+                views: 1,
+                likes: 1,
+                createdAt: 1,
+                userId: {
+                  _id: '$userDetails._id',
+                  username: '$userDetails.username',
+                  profilePicture: '$userDetails.profilePicture'
+                }
+              }
+            }
+          ])
           break
-        case 'trending':
-          // Last 24 hours with most views
-          query = {
-            createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-          }
+
+        case 'commented':
+          // Get videos with most comments
+          videos = await VideoModel.aggregate([
+            {
+              $lookup: {
+                from: 'comments',
+                localField: '_id',
+                foreignField: 'videoId',
+                as: 'comments'
+              }
+            },
+            {
+              $addFields: {
+                commentsCount: { $size: '$comments' }
+              }
+            },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'userId',
+                foreignField: '_id',
+                as: 'userDetails'
+              }
+            },
+            { $unwind: '$userDetails' },
+            { $sort: { commentsCount: -1 } },
+            { $limit: limit },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                description: 1,
+                thumbnailUrl: 1,
+                hlsUrl: 1,
+                views: 1,
+                createdAt: 1,
+                userId: {
+                  _id: '$userDetails._id',
+                  username: '$userDetails.username',
+                  profilePicture: '$userDetails.profilePicture'
+                },
+                commentsCount: 1
+              }
+            }
+          ])
           break
+
         default:
-          res.status(400).json({ error: 'Invalid type' })
+          res.status(400).json({ error: 'Invalid type parameter' })
           return
       }
 
-      const videos = await VideoModel.find(query)
-        .populate('userId', 'username profilePicture')
-        .sort({ [type === 'trending' ? 'views' : type]: -1 })
-        .limit(5)
+      // Transform _id to id for frontend consistency
+      const transformedVideos = videos.map(video => ({
+        ...video,
+        id: video._id,
+        status: 'ready' as const
+      }))
 
-      res.json(videos)
+      res.json(transformedVideos)
     } catch (error) {
-      res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+      console.error('Get top videos error:', error)
+      res.status(500).json({ error: 'Failed to get top videos' })
     }
   }
 
@@ -213,6 +367,28 @@ export class VideoController {
     } catch (error) {
       console.error('Error deleting comment:', error)
       return res.status(500).json({ error: 'Failed to delete comment' })
+    }
+  }
+
+  async addView(req: AuthRequest, res: Response) {
+    try {
+      const { videoId } = req.params
+      const userId = req.user?.id // Optional - can be used to prevent duplicate views
+
+      const video = await VideoModel.findById(videoId)
+      if (!video) {
+        return res.status(404).json({ error: 'Video not found' })
+      }
+
+      // Increment views count
+      await VideoModel.findByIdAndUpdate(videoId, {
+        $inc: { views: 1 }
+      })
+
+      res.status(200).json({ message: 'View counted successfully' })
+    } catch (error) {
+      console.error('Add view error:', error)
+      res.status(500).json({ error: 'Failed to add view' })
     }
   }
 } 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Pencil, Trash2 } from 'lucide-react'
+import { X, Send, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useAuthStore } from '@/stores/authStore'
 import { VideoService } from '../../../services/video.service'
@@ -18,23 +18,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import type { Comment } from '@/types/comment.types'
 
 // Define interfaces
 interface User {
   id: string
   username: string
   profilePicture?: string
-}
-
-interface Comment {
-  id: string
-  content: string
-  userId: {
-    id: string
-    username: string
-    profilePicture?: string
-  }
-  createdAt: string
 }
 
 interface CommentSectionProps {
@@ -50,6 +40,8 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
   const [isFetching, setIsFetching] = useState(false)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [commentToDelete, setCommentToDelete] = useState<string | null>(null)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
   
   // Hooks
   const { user } = useAuthStore()
@@ -70,6 +62,17 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
     handleSubmit: handleEditSubmit,
     reset: resetEdit,
     watch: watchEdit
+  } = useForm<{ content: string }>({
+    defaultValues: {
+      content: ''
+    }
+  })
+
+  // Add form for replies
+  const {
+    register: registerReply,
+    handleSubmit: handleReplySubmit,
+    reset: resetReply,
   } = useForm<{ content: string }>({
     defaultValues: {
       content: ''
@@ -206,127 +209,339 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
     }
   }
 
+  // Add reply handler
+  const handleReply = async (commentId: string, data: { content: string }) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to reply",
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      // Optimistic update
+      const optimisticReply: Comment = {
+        id: Date.now().toString(),
+        content: data.content,
+        userId: {
+          id: user.id,
+          username: user.username,
+          profilePicture: user.profilePicture
+        },
+        createdAt: new Date().toISOString(),
+        parentId: commentId
+      }
+      
+      setComments(prev => 
+        prev.map(comment => 
+          comment.id === commentId
+            ? { ...comment, replies: [...(comment.replies || []), optimisticReply] }
+            : comment
+        )
+      )
+      
+      resetReply()
+      setReplyingTo(null)
+      
+      // API call
+      const newReply = await VideoService.addReply(videoId, commentId, data.content)
+      
+      // Update with actual reply data
+      setComments(prev => 
+        prev.map(comment => 
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: (comment.replies || []).map(reply =>
+                  reply.id === optimisticReply.id ? newReply : reply
+                )
+              }
+            : comment
+        )
+      )
+      
+    } catch (error) {
+      console.error('Failed to post reply:', error)
+      // Remove optimistic reply on error
+      setComments(prev => 
+        prev.map(comment => 
+          comment.id === commentId
+            ? {
+                ...comment,
+                replies: (comment.replies || []).filter(
+                  reply => reply.id !== Date.now().toString()
+                )
+              }
+            : comment
+        )
+      )
+      toast({
+        title: "Error",
+        description: "Failed to post reply",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Toggle function for replies
+  const toggleReplies = (commentId: string) => {
+    setExpandedComments(prev => {
+      const next = new Set(prev)
+      if (next.has(commentId)) {
+        next.delete(commentId)
+      } else {
+        next.add(commentId)
+      }
+      return next
+    })
+  }
+
   // Render individual comment
   const renderComment = (comment: Comment) => {
     const isOwner = user?.id === comment.userId.id
     const isEditing = editingCommentId === comment.id
+    const isReplying = replyingTo === comment.id
+    const isExpanded = expandedComments.has(comment.id)
+    const hasReplies = comment.replies && comment.replies.length > 0
 
     return (
-      <div key={comment.id} className="flex gap-4 py-4 border-b">
-        <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0">
-          {comment.userId.profilePicture ? (
-            <img
-              src={comment.userId.profilePicture}
-              alt={comment.userId.username}
-              className="w-full h-full rounded-full"
-            />
-          ) : (
-            <div className="w-full h-full rounded-full flex items-center justify-center bg-primary text-white">
-              {comment.userId.username[0].toUpperCase()}
-            </div>
-          )}
-        </div>
-        
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{comment.userId.username}</span>
-              <span className="text-sm text-gray-500">
-                {new Date(comment.createdAt).toLocaleDateString()}
-              </span>
-            </div>
-            
-            {isOwner && (
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleEdit(comment)}
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  <Pencil className="h-4 w-4" />
-                  <span className="sr-only">Edit comment</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setCommentToDelete(comment.id)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Delete comment</span>
-                </Button>
+      <div key={comment.id} className="space-y-4">
+        <div className="flex gap-4 py-4 border-b">
+          <div className="w-10 h-10 rounded-full bg-gray-200 flex-shrink-0">
+            {comment.userId.profilePicture ? (
+              <img
+                src={comment.userId.profilePicture}
+                alt={comment.userId.username}
+                className="w-full h-full rounded-full"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full flex items-center justify-center bg-primary text-white">
+                {comment.userId.username[0].toUpperCase()}
               </div>
             )}
           </div>
-
-          {isEditing ? (
-            <form onSubmit={handleEditSubmit(async (data) => {
-              if (!data.content.trim()) return
+          
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{comment.userId.username}</span>
+                <span className="text-sm text-gray-500">
+                  {new Date(comment.createdAt).toLocaleDateString()}
+                </span>
+              </div>
               
-              try {
-                setIsLoading(true)
-                const updatedComment = await VideoService.updateComment(
-                  videoId, 
-                  comment.id, 
-                  data.content.trim()
-                )
-                
-                setComments(prev => 
-                  prev.map(c => c.id === comment.id ? updatedComment : c)
-                )
-                
-                handleCancelEdit()
-                toast({
-                  title: "Success",
-                  description: "Comment updated successfully"
-                })
-              } catch (error) {
-                console.error('Failed to update comment:', error)
-                toast({
-                  title: "Error",
-                  description: "Failed to update comment",
-                  variant: "destructive"
-                })
-              } finally {
-                setIsLoading(false)
-              }
-            })}>
-              <div className="space-y-2">
-                <Textarea
-                  {...registerEdit('content', {
-                    required: 'Comment cannot be empty',
-                    validate: value => value.trim() !== '' || 'Comment cannot be empty'
-                  })}
-                  placeholder="Edit your comment..."
-                  className="min-h-[80px] w-full"
-                  disabled={isLoading}
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+              {isOwner && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={handleCancelEdit}
-                    disabled={isLoading}
+                    onClick={() => handleEdit(comment)}
+                    className="text-gray-600 hover:text-gray-900"
                   >
-                    Cancel
+                    <Pencil className="h-4 w-4" />
+                    <span className="sr-only">Edit comment</span>
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    variant="outline"
                     size="sm"
-                    disabled={isLoading || watchEdit('content')?.trim() === comment.content.trim()}
+                    onClick={() => setCommentToDelete(comment.id)}
+                    className="text-red-600 hover:text-red-700"
                   >
-                    {isLoading ? <LoadingSpinner size={16} /> : 'Save'}
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Delete comment</span>
                   </Button>
                 </div>
-              </div>
-            </form>
-          ) : (
-            <p className="mt-1 text-gray-700">{comment.content}</p>
-          )}
+              )}
+            </div>
+
+            {isEditing ? (
+              <form onSubmit={handleEditSubmit(async (data) => {
+                if (!data.content.trim()) return
+              
+                try {
+                  setIsLoading(true)
+                  const updatedComment = await VideoService.updateComment(
+                    videoId, 
+                    comment.id, 
+                    data.content.trim()
+                  )
+                  
+                  setComments(prev => 
+                    prev.map(c => c.id === comment.id ? updatedComment : c)
+                  )
+                  
+                  handleCancelEdit()
+                  toast({
+                    title: "Success",
+                    description: "Comment updated successfully"
+                  })
+                } catch (error) {
+                  console.error('Failed to update comment:', error)
+                  toast({
+                    title: "Error",
+                    description: "Failed to update comment",
+                    variant: "destructive"
+                  })
+                } finally {
+                  setIsLoading(false)
+                }
+              })}>
+                <div className="space-y-2">
+                  <Textarea
+                    {...registerEdit('content', {
+                      required: 'Comment cannot be empty',
+                      validate: value => value.trim() !== '' || 'Comment cannot be empty'
+                    })}
+                    placeholder="Edit your comment..."
+                    className="min-h-[80px] w-full"
+                    disabled={isLoading}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      size="sm"
+                      disabled={isLoading || watchEdit('content')?.trim() === comment.content.trim()}
+                    >
+                      {isLoading ? <LoadingSpinner size={16} /> : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <p className="mt-1 text-gray-700">{comment.content}</p>
+            )}
+
+            {/* Reply and Show Replies buttons */}
+            <div className="flex items-center gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReplyingTo(comment.id)}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                Reply
+              </Button>
+              
+              {hasReplies && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleReplies(comment.id)}
+                  className="text-gray-600 hover:text-gray-900 flex items-center gap-1"
+                >
+                  {isExpanded ? (
+                    <>
+                      Hide Replies
+                      <ChevronUp className="h-4 w-4" />
+                    </>
+                  ) : (
+                    <>
+                      Show Replies ({comment.replies?.length})
+                      <ChevronDown className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {/* Reply form */}
+            {isReplying && (
+              <form onSubmit={handleReplySubmit(data => handleReply(comment.id, data))} className="mt-4">
+                <div className="space-y-2">
+                  <Textarea
+                    {...registerReply('content', {
+                      required: 'Reply cannot be empty',
+                      validate: value => value.trim() !== '' || 'Reply cannot be empty'
+                    })}
+                    placeholder="Write a reply..."
+                    className="min-h-[80px] w-full"
+                    disabled={isLoading}
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        setReplyingTo(null)
+                        resetReply()
+                      }}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      size="sm"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <LoadingSpinner size={16} /> : 'Reply'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
+
+        {/* Render replies with animation */}
+        {hasReplies && (
+          <AnimatePresence>
+            {isExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="ml-12 space-y-4 overflow-hidden"
+              >
+                {comment.replies?.map(reply => (
+                  <div key={`reply-${reply.id}`} className="flex gap-4 py-4 border-b">
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0">
+                      {reply.userId.profilePicture ? (
+                        <img
+                          src={reply.userId.profilePicture}
+                          alt={reply.userId.username}
+                          className="w-full h-full rounded-full"
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-full flex items-center justify-center bg-primary text-white">
+                          {reply.userId.username[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{reply.userId.username}</span>
+                        <span className="text-sm text-gray-500">
+                          {new Date(reply.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-gray-700">{reply.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </div>
     )
   }
@@ -356,7 +571,7 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <h2 className="text-xl font-semibold">Comments</h2>
-                <Button variant="ghost" size="icon" onClick={onClose}>
+                <Button variant="outline" size="icon" onClick={onClose}>
                   <X className="h-6 w-6" />
                 </Button>
               </div>
@@ -370,7 +585,7 @@ export function CommentSection({ videoId, isOpen, onClose }: CommentSectionProps
                 ) : comments.length === 0 ? (
                   <p className="text-center text-gray-500">No comments yet</p>
                 ) : (
-                  comments.map(renderComment)
+                  comments.map(comment => renderComment(comment))
                 )}
               </div>
 

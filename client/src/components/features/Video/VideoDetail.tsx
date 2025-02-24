@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Pencil, Trash2, ThumbsUp, ThumbsDown, MoreVertical, Users, Bell, MessageSquare } from 'lucide-react'
@@ -32,6 +32,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { followUser, unfollowUser, checkFollowStatus } from '@/lib/api'
 
 interface VideoDetailProps {
   videoId: string
@@ -50,6 +51,12 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [hasViewed, setHasViewed] = useState(false)
+  const videoStartTimeRef = useRef<number | null>(null)
+  const [viewCount, setViewCount] = useState<number>(0)
+  const [isLiked, setIsLiked] = useState(false)
 
   // Query
   const { data: video, isLoading: isLoadingVideo, error } = useQuery<Video>({
@@ -60,6 +67,45 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   // Check if user is owner
   // const isOwner = user?.id === video?.userId?._id || user?.id === video?.userId?.id
   const isOwner = user?.id === video?.userId._id
+
+  // Add effect to check follow status and get followers count
+  useEffect(() => {
+    const checkFollow = async () => {
+      if (!isOwner && user && video?.userId?._id) {
+        try {
+          const status = await checkFollowStatus(video.userId._id)
+          setIsFollowing(status)
+          setFollowersCount(video.userId.followersCount || 0)
+        } catch (error) {
+          console.error('Failed to check follow status:', error)
+        }
+      }
+    }
+
+    checkFollow()
+  }, [isOwner, user, video])
+
+  // Update the useEffect to set initial followers count
+  useEffect(() => {
+    if (video?.userId?.followersCount) {
+      setFollowersCount(video.userId.followersCount)
+    }
+  }, [video])
+
+  // Update initial view count when video data loads
+  useEffect(() => {
+    if (video?.views) {
+      setViewCount(video.views)
+    }
+  }, [video])
+
+  // Add this effect after the other useEffects
+  useEffect(() => {
+    // Initialize like status when video loads
+    if (video?.likes) {
+      setIsLiked(false) // Default to unliked state
+    }
+  }, [video])
 
   // Handlers
   const handleEdit = () => {
@@ -93,7 +139,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
         description: "Video updated successfully"
       })
     } catch (error) {
-      console.error('Failed to update video:', error)
       toast({
         title: "Error",
         description: "Failed to update video",
@@ -117,7 +162,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
       // Navigate back to home page
       navigate('/')
     } catch (error) {
-      console.error('Failed to delete video:', error)
       toast({
         title: "Error",
         description: "Failed to delete video",
@@ -126,6 +170,132 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     } finally {
       setIsLoading(false)
       setShowDeleteDialog(false)
+    }
+  }
+
+  // Update the handleFollow/handleUnfollow to update the count
+  const handleFollow = async () => {
+    if (!video?.userId?._id) return
+    try {
+      await followUser(video.userId._id)
+      setIsFollowing(true)
+      setFollowersCount(prev => prev + 1)
+      toast({
+        title: "Success",
+        description: "Successfully followed user"
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to follow user",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleUnfollow = async () => {
+    if (!video?.userId?._id) return
+    try {
+      await unfollowUser(video.userId._id)
+      setIsFollowing(false)
+      setFollowersCount(prev => prev - 1)
+      toast({
+        title: "Success",
+        description: "Successfully unfollowed user"
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to unfollow user",
+        variant: "destructive"
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (!video || hasViewed) return
+
+    const handleVideoView = async () => {
+      try {
+        const updatedViews = await VideoService.addView(videoId)
+        setViewCount(updatedViews)
+        setHasViewed(true)
+      } catch (error) {
+        console.error('Failed to record view:', error)
+      }
+    }
+
+    const checkViewDuration = (duration: number) => {
+      if (!videoStartTimeRef.current) {
+        videoStartTimeRef.current = Date.now()
+        return
+      }
+
+      const viewDuration = (Date.now() - videoStartTimeRef.current) / 1000
+      const requiredDuration = duration <= 10 ? duration * 0.5 : 5 // 50% for short videos, 5s for longer ones
+
+      if (viewDuration >= requiredDuration) {
+        handleVideoView()
+      }
+    }
+
+    // Add event listeners to video element with proper function references
+    const videoElement = document.querySelector('video')
+    if (videoElement) {
+      const duration = videoElement.duration
+      const boundCheckViewDuration = () => checkViewDuration(duration)
+
+      videoElement.addEventListener('timeupdate', boundCheckViewDuration)
+      videoElement.addEventListener('ended', boundCheckViewDuration)
+
+      return () => {
+        videoElement.removeEventListener('timeupdate', boundCheckViewDuration)
+        videoElement.removeEventListener('ended', boundCheckViewDuration)
+      }
+    }
+  }, [video, hasViewed, videoId])
+
+  // Update the handleLikeClick function
+  const handleLikeClick = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please login to like videos",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      if (isLiked) {
+        await VideoService.unlikeVideo(videoId)
+        // Update local state immediately for better UX
+        setIsLiked(false)
+        queryClient.setQueryData(['video', videoId], (oldData: any) => ({
+          ...oldData,
+          likes: (oldData.likes || 0) - 1
+        }))
+      } else {
+        await VideoService.likeVideo(videoId)
+        // Update local state immediately for better UX
+        setIsLiked(true)
+        queryClient.setQueryData(['video', videoId], (oldData: any) => ({
+          ...oldData,
+          likes: (oldData.likes || 0) + 1
+        }))
+      }
+      
+      // Refetch in the background to ensure data consistency
+      queryClient.invalidateQueries({queryKey: ['video', videoId]})
+      
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update like status",
+        variant: "destructive"
+      })
+      // Revert optimistic update on error
+      setIsLiked(!isLiked)
     }
   }
 
@@ -140,7 +310,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   if (!video) {
     return <div>Video not found</div>
   }
-  console.log(video)
   return (
     <div className="max-w-[1280px] mx-auto bg-white">
       {/* Video Player Container */}
@@ -190,7 +359,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={video.userId.avatarUrl} alt={video.userId.username} />
+                    <AvatarImage src={video.userId.profilePicture} />
                     <AvatarFallback>{video.userId.username[0]}</AvatarFallback>
                   </Avatar>
                   <div>
@@ -203,22 +372,33 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                       </Link>
                     </h3>
                     <p className="text-sm text-gray-600">
-                      {video.userId.subscribers?.toLocaleString() || '0'} subscribers
+                      {followersCount.toLocaleString()} Followers
                     </p>
                   </div>
                 </div>
                 
-                {!isOwner && (
-                  <Button variant="secondary" className="rounded-full hover:bg-gray-100">
-                    <Bell className="h-4 w-4 mr-2" />
-                    Subscribe
+                {!isOwner && user && (
+                  <Button
+                    variant={isFollowing ? "outline" : "default"}
+                    className="rounded-full hover:bg-gray-100"
+                    onClick={isFollowing ? handleUnfollow : handleFollow}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    {isFollowing ? "Following" : "Follow"}
                   </Button>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
                 <div className="bg-gray-100 rounded-full flex items-center">
-                  <Button variant="outline" className="rounded-l-full hover:bg-gray-200">
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "rounded-l-full hover:bg-gray-200",
+                      isLiked && "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                    onClick={handleLikeClick}
+                  >
                     <ThumbsUp className="mr-2 h-4 w-4" />
                     {video.likes?.toLocaleString() || '0'}
                   </Button>
@@ -266,7 +446,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
             {/* Video Info */}
             <div className="mt-4 bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>{video.views?.toLocaleString() || '0'} views</span>
+                <span>{viewCount.toLocaleString()} views</span>
                 <span>•</span>
                 <span>{new Date(video.createdAt).toLocaleDateString()}</span>
               </div>

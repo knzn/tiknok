@@ -6,7 +6,7 @@ import { ProfileSetupModal } from '../components/profile/ProfileSetupModal'
 import { EditProfileModal } from '../components/profile/EditProfileModal'
 import { UpdateProfilePictureModal } from '../components/profile/UpdateProfilePictureModal'
 import { Camera } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, followUser, unfollowUser, checkFollowStatus } from '../lib/api'
 
 // Add this helper function at the top of the file
 const addCacheBuster = (url: string) => {
@@ -31,7 +31,9 @@ export function ProfilePage() {
   const [showProfilePictureModal, setShowProfilePictureModal] = useState(false)
   const [imageVersion, setImageVersion] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
 
   const isOwnProfile = user?.username === username
 
@@ -39,8 +41,6 @@ export function ProfilePage() {
     const fetchProfile = async () => {
       try {
         setIsLoading(true)
-        setError(null)
-        
         if (isOwnProfile) {
           // Fetch personal profile
           const response = await api.get('/users/profile')
@@ -50,28 +50,33 @@ export function ProfilePage() {
               ...response.data
             })
             setProfileData(response.data)
+            setFollowersCount(response.data.followersCount)
+            setFollowingCount(response.data.followingCount)
           }
         } else {
           // Fetch public profile
-          const response = await api.get(`/users/profile/${username}`)
-          setProfileData(response.data)
+          try {
+            const response = await api.get(`/users/profile/${username}`)
+            setProfileData(response.data)
+            setFollowersCount(response.data.followersCount)
+            setFollowingCount(response.data.followingCount)
+          } catch (error: any) {
+            if (error.response?.status === 404) {
+              // User not found, redirect to home page
+              navigate('/')
+            }
+            console.error('Failed to fetch profile:', error)
+          }
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to fetch profile:', error)
-        setError(error?.response?.data?.error || 'Failed to load profile')
-        if (error?.response?.status === 404) {
-          setTimeout(() => {
-            navigate('/')
-          }, 2000)
-        }
+        // If there's any other error for own profile, you might want to show an error state
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (username) {
-      fetchProfile()
-    }
+    fetchProfile()
   }, [username, isOwnProfile, navigate])
 
   // Show setup modal only on first visit when gamefarmName is not set
@@ -87,31 +92,42 @@ export function ProfilePage() {
     }
   }, [user?.profilePicture])
 
+  useEffect(() => {
+    const checkFollow = async () => {
+      if (!isOwnProfile && user && profileData?._id) {
+        try {
+          const status = await checkFollowStatus(profileData._id)
+          setIsFollowing(status)
+        } catch (error) {
+          console.error('Failed to check follow status:', error)
+        }
+      }
+    }
+
+    checkFollow()
+  }, [isOwnProfile, user, profileData])
+
+  const handleFollow = async () => {
+    try {
+      await followUser(profileData._id)
+      setIsFollowing(true)
+      setFollowersCount(prev => prev + 1)
+    } catch (error) {
+      console.error('Failed to follow:', error)
+    }
+  }
+
+  const handleUnfollow = async () => {
+    try {
+      await unfollowUser(profileData._id)
+      setIsFollowing(false)
+      setFollowersCount(prev => prev - 1)
+    } catch (error) {
+      console.error('Failed to unfollow:', error)
+    }
+  }
+
   const displayData = isOwnProfile ? user : profileData
-
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">Loading profile...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show error state with redirect message
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-destructive mb-2">Profile Not Found</h2>
-          <p className="text-muted-foreground">Redirecting to home page...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,6 +177,17 @@ export function ProfilePage() {
               Edit Profile
             </Button>
           )}
+
+          {!isOwnProfile && user && (
+            <Button
+              variant={isFollowing ? "outline" : "default"}
+              size="lg"
+              onClick={isFollowing ? handleUnfollow : handleFollow}
+              className="mt-4"
+            >
+              {isFollowing ? "Unfollow" : "Follow"}
+            </Button>
+          )}
         </div>
 
         {/* Profile Details Card */}
@@ -198,11 +225,11 @@ export function ProfilePage() {
             {/* Stats */}
             <div className="flex justify-center gap-12 pt-6 border-t">
               <div>
-                <span className="text-2xl font-bold">122</span>
+                <span className="text-2xl font-bold">{followersCount}</span>
                 <span className="text-muted-foreground ml-2">followers</span>
               </div>
               <div>
-                <span className="text-2xl font-bold">67</span>
+                <span className="text-2xl font-bold">{followingCount}</span>
                 <span className="text-muted-foreground ml-2">following</span>
               </div>
               <div>

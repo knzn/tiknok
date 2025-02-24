@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Home, Compass, Users, Settings } from 'lucide-react'
+import { Home, Users, Settings, Flame } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 interface SidebarProps {
@@ -15,9 +15,9 @@ export function Sidebar({ className }: SidebarProps) {
       icon: Home
     },
     {
-      title: 'Explore',
-      href: '/explore',
-      icon: Compass
+      title: 'Trending',
+      href: '/trending',
+      icon: Flame
     },
     {
       title: 'Following',

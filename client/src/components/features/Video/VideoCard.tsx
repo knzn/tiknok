@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Video } from '@video-app/shared/types/video.types'
+import type { Video } from '../../../types/video.types'
+import { Avatar, AvatarImage, AvatarFallback } from "../../../components/ui/avatar"
+import { ThumbsUp, Eye } from 'lucide-react'
 
 interface VideoCardProps {
   video: Video
@@ -11,8 +13,10 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
   const [isHovered, setIsHovered] = useState(false)
 
   // Get username safely with fallback
-  const username = video.userId?.username || video.user?.username || 'Unknown User'
+  const username = video.userId?.username || 'Unknown User'
+  const profilePicture = video.userId?.profilePicture
   const firstLetter = username.charAt(0).toUpperCase()
+  const videoId = video.id || video._id // Handle both id formats
 
   return (
     <div 
@@ -21,7 +25,7 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
         if (onVideoClick) onVideoClick()
-        else window.location.href = `/video/${video.id}`
+        else window.location.href = `/video/${videoId}`
       }}
     >
       {/* Video Thumbnail */}
@@ -36,20 +40,32 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
 
       {/* Video Info */}
       <div className="absolute bottom-20 left-4 right-16 z-10">
-        <h3 className="text-white text-lg font-semibold line-clamp-2">{video.title}</h3>
-        <div className="mt-2 flex items-center text-white/80 text-sm">
-          <span>{video.views?.toLocaleString() || 0} reactions</span>
-        </div>
-        <div className="mt-2 flex items-center text-white/80 text-sm">
-          <span>{video.views?.toLocaleString() || 0} views</span>
+        <h3 className="text-white text-lg font-semibold line-clamp-2">
+          {video.title}
+        </h3>
+        <div className="flex items-center gap-4 mt-2 text-white/80">
+          <div className="flex items-center gap-1">
+            <ThumbsUp className="w-4 h-4" />
+            <span>{video.likes || 0}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Eye className="w-4 h-4" />
+            <span>{video.views || 0}</span>
+          </div>
         </div>
       </div>
 
       {/* User Info */}
       <div className="absolute bottom-4 left-4 flex items-center gap-2 z-10">
-        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
-          {firstLetter}
-        </div>
+        <Avatar className="h-10 w-10">
+          <AvatarImage 
+            src={profilePicture} 
+            alt={username} 
+          />
+          <AvatarFallback className="bg-primary text-primary-foreground">
+            {firstLetter}
+          </AvatarFallback>
+        </Avatar>
         <Link 
           to={`/profile/${username}`}
           className="text-white font-medium hover:underline"

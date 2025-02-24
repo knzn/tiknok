@@ -76,4 +76,38 @@ router.get('/profile', authMiddleware, async (req, res, next) => {
   }
 })
 
+// Add this new route before the other routes
+router.get('/profile/:username', async (req, res, next) => {
+  try {
+    await UserController.getPublicProfile(req, res)
+  } catch (error) {
+    next(error)
+  }
+})
+
+// Add these new routes
+router.post('/follow/:userId', authMiddleware, async (req, res, next) => {
+  try {
+    await UserController.followUser(req as AuthRequest, res)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.delete('/follow/:userId', authMiddleware, async (req, res, next) => {
+  try {
+    await UserController.unfollowUser(req as AuthRequest, res)
+  } catch (error) {
+    next(error)
+  }
+})
+
+router.get('/follow/check/:userId', authMiddleware, async (req, res, next) => {
+  try {
+    await UserController.checkFollowStatus(req as AuthRequest, res)
+  } catch (error) {
+    next(error)
+  }
+})
+
 export { router as userRoutes } 

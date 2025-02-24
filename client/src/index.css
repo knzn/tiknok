@@ -243,3 +243,13 @@ button:focus-visible {
   @apply rounded-full bg-gray-200 flex items-center justify-center text-gray-600 
          font-semibold overflow-hidden;
 }
+
+/* Add this to your existing CSS */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
