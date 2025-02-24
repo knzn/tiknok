@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, ThumbsUp, ThumbsDown, MoreVertical, Users, Bell, MessageSquare } from 'lucide-react'
 import { VideoService } from '@/services/video.service'
 import { VideoPlayer } from './VideoPlayer'
 import { CommentSection } from '../Comment/CommentSection'
@@ -23,6 +23,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { Video } from '@video-app/shared/types/video.types'
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 interface VideoDetailProps {
   videoId: string
@@ -133,71 +142,29 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   }
   console.log(video)
   return (
-    <div className="space-y-4">
-      {/* Video Container */}
-      <div className="relative aspect-video">
-        <VideoPlayer 
-          src={video.hlsUrl}
-          poster={video.thumbnailUrl}
-          aspectRatio={video.aspectRatio || 16/9}
-          autoPlay
-        />
-        
-        {/* Actions Container */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20">
-          {/* Like Button */}
-          <button className="action-button group bg-gray-900/80 p-2 rounded-full hover:bg-gray-800/80 transition-colors">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" 
-              />
-            </svg>
-          </button>
-
-          {/* Comment Button */}
-          <button 
-            className="action-button group bg-gray-900/80 p-2 rounded-full hover:bg-gray-800/80 transition-colors"
-            onClick={() => setShowComments(true)}
-          >
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" 
-              />
-            </svg>
-          </button>
-
-          {/* Owner Actions */}
-          {isOwner && (
-            <>
-              <button 
-                className="action-button group bg-red-600/80 p-2 rounded-full hover:bg-red-700/80 transition-colors"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="w-6 h-6 text-white" />
-              </button>
-            </>
-          )}
+    <div className="max-w-[1280px] mx-auto bg-white">
+      {/* Video Player Container */}
+      <div className="w-full">
+        <div className="relative aspect-video">
+          <VideoPlayer 
+            src={video.hlsUrl}
+            poster={video.thumbnailUrl}
+            aspectRatio={video.aspectRatio || 16/9}
+            autoPlay
+          />
         </div>
-
-        {/* Video Gradient Overlay */}
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
       </div>
 
-      {/* Video Info */}
-      <div className="mt-4">
+      {/* Content Container */}
+      <div className="p-4 lg:p-6 bg-white">
+        {/* Title Section */}
         {isEditing ? (
           <div className="space-y-4">
             <Input
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               placeholder="Video title"
-              className="text-2xl font-bold"
+              className="text-xl md:text-2xl font-bold"
             />
             <Textarea
               value={editDescription}
@@ -206,64 +173,115 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
               className="min-h-[100px]"
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={handleCancelEdit}
-                disabled={isLoading}
-              >
+              <Button variant="outline" onClick={handleCancelEdit} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={isLoading || (!editTitle.trim() && !editDescription.trim())}
-              >
+              <Button onClick={handleSaveEdit} disabled={isLoading}>
                 {isLoading ? <LoadingSpinner size={16} /> : 'Save'}
               </Button>
             </div>
           </div>
         ) : (
           <>
-          <div>
-            {/* Owner Actions */}
-            {isOwner && (
-              <>
-                <button 
-                  className="action-button group bg-gray-900/80 p-2 rounded-full hover:bg-gray-800/80 transition-colors"
-                  onClick={handleEdit}
+            <h1 className="text-xl md:text-2xl font-bold mb-2 text-gray-900">{video.title}</h1>
+            
+            {/* Channel and Actions Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-4">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={video.userId.avatarUrl} alt={video.userId.username} />
+                    <AvatarFallback>{video.userId.username[0]}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h3 className="font-medium text-gray-900">{video.userId.username}</h3>
+                    <p className="text-sm text-gray-600">
+                      {video.userId.subscribers?.toLocaleString() || '0'} subscribers
+                    </p>
+                  </div>
+                </div>
+                
+                {!isOwner && (
+                  <Button variant="secondary" className="rounded-full hover:bg-gray-100">
+                    <Bell className="h-4 w-4 mr-2" />
+                    Subscribe
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="bg-gray-100 rounded-full flex items-center">
+                  <Button variant="outline" className="rounded-l-full hover:bg-gray-200">
+                    <ThumbsUp className="mr-2 h-4 w-4" />
+                    {video.likes?.toLocaleString() || '0'}
+                  </Button>
+                  <Separator orientation="vertical" className="h-6" />
+                  <Button variant="outline" className="rounded-r-full hover:bg-gray-200">
+                    <ThumbsDown className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Button 
+                  variant="outline" 
+                  className="rounded-full hover:bg-gray-100"
+                  onClick={() => setShowComments(true)}
                 >
-                  <Pencil className="w-3 h-3 text-white" />
-                </button>
-              </>
-            )}
-          </div>
-            <h1 className="text-2xl font-bold">{video.userId.username}</h1>
-            <h1 className="text-2xl font-bold">Title: {video.title}</h1>
-            <div className="flex items-center mt-2 space-x-4">
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">
-                  {video.views?.toLocaleString() || 0} views
-                </span>
-                <span>•</span>
-                <span className="text-sm text-gray-600">
-                  {new Date(video.createdAt).toLocaleDateString()}
-                </span>
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Comments
+                </Button>
+
+                {isOwner && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="hover:bg-gray-100">
+                        <MoreVertical className="h-5 w-5" />
+                        Edit
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleEdit}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => setShowDeleteDialog(true)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
-            {video.description && (
-              <p className="mt-4 text-gray-600">{video.description}</p>
-            )}
+
+            {/* Video Info */}
+            <div className="mt-4 bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>{video.views?.toLocaleString() || '0'} views</span>
+                <span>•</span>
+                <span>{new Date(video.createdAt).toLocaleDateString()}</span>
+              </div>
+              
+              {video.description && (
+                <p className="mt-2 text-gray-700 whitespace-pre-wrap">{video.description}</p>
+              )}
+            </div>
           </>
+        )}
+
+        {/* Comment Section Dialog */}
+        {showComments && (
+          <CommentSection
+            videoId={videoId}
+            isOpen={showComments}
+            onClose={() => setShowComments(false)}
+          />
         )}
       </div>
 
-      {/* Comment Section */}
-      <CommentSection
-        videoId={videoId}
-        isOpen={showComments}
-        onClose={() => setShowComments(false)}
-      />
-
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
