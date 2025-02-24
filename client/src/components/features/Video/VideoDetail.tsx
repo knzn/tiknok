@@ -56,7 +56,9 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const [hasViewed, setHasViewed] = useState(false)
   const videoStartTimeRef = useRef<number | null>(null)
   const [viewCount, setViewCount] = useState<number>(0)
-  const [isLiked, setIsLiked] = useState(false)
+  const [likeStatus, setLikeStatus] = useState<'like' | 'dislike' | null>(null)
+  const [likesCount, setLikesCount] = useState(0)
+  const [dislikesCount, setDislikesCount] = useState(0)
 
   // Query
   const { data: video, isLoading: isLoadingVideo, error } = useQuery<Video>({
@@ -99,11 +101,11 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     }
   }, [video])
 
-  // Add this effect after the other useEffects
+  // Add this effect to fetch initial counts
   useEffect(() => {
-    // Initialize like status when video loads
-    if (video?.likes) {
-      setIsLiked(false) // Default to unliked state
+    if (video) {
+      setLikesCount(video.likes || 0)
+      setDislikesCount(video.dislikes || 0)
     }
   }, [video])
 
@@ -255,11 +257,11 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     }
   }, [video, hasViewed, videoId])
 
-  // Update the handleLikeClick function
-  const handleLikeClick = async () => {
+  // Add these handlers
+  const handleLike = async () => {
     if (!user) {
       toast({
-        title: "Authentication Required",
+        title: "Error",
         description: "Please login to like videos",
         variant: "destructive"
       })
@@ -267,35 +269,40 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     }
 
     try {
-      if (isLiked) {
-        await VideoService.unlikeVideo(videoId)
-        // Update local state immediately for better UX
-        setIsLiked(false)
-        queryClient.setQueryData(['video', videoId], (oldData: any) => ({
-          ...oldData,
-          likes: (oldData.likes || 0) - 1
-        }))
-      } else {
-        await VideoService.likeVideo(videoId)
-        // Update local state immediately for better UX
-        setIsLiked(true)
-        queryClient.setQueryData(['video', videoId], (oldData: any) => ({
-          ...oldData,
-          likes: (oldData.likes || 0) + 1
-        }))
-      }
-      
-      // Refetch in the background to ensure data consistency
-      queryClient.invalidateQueries({queryKey: ['video', videoId]})
-      
+      const { likes, dislikes, status } = await VideoService.toggleLike(videoId, 'like')
+      setLikeStatus(status)
+      setLikesCount(likes)
+      setDislikesCount(dislikes)
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to update like status",
         variant: "destructive"
       })
-      // Revert optimistic update on error
-      setIsLiked(!isLiked)
+    }
+  }
+
+  const handleDislike = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please login to dislike videos",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const { likes, dislikes, status } = await VideoService.toggleLike(videoId, 'dislike')
+      setLikeStatus(status)
+      setLikesCount(likes)
+      setDislikesCount(dislikes)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update like status",
+        variant: "destructive"
+      })
     }
   }
 
@@ -395,16 +402,24 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                     variant="outline" 
                     className={cn(
                       "rounded-l-full hover:bg-gray-200",
-                      isLiked && "bg-primary text-primary-foreground hover:bg-primary/90"
+                      likeStatus === 'like' && "bg-blue-100 text-blue-600"
                     )}
-                    onClick={handleLikeClick}
+                    onClick={handleLike}
                   >
                     <ThumbsUp className="mr-2 h-4 w-4" />
-                    {video.likes?.toLocaleString() || '0'}
+                    {likesCount.toLocaleString()}
                   </Button>
                   <Separator orientation="vertical" className="h-6" />
-                  <Button variant="outline" className="rounded-r-full hover:bg-gray-200">
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "rounded-r-full hover:bg-gray-200",
+                      likeStatus === 'dislike' && "bg-red-100 text-red-600"
+                    )}
+                    onClick={handleDislike}
+                  >
                     <ThumbsDown className="h-4 w-4" />
+                    {dislikesCount.toLocaleString()}
                   </Button>
                 </div>
 

@@ -9,6 +9,7 @@ import { VideoModel } from '../models/video.model'
 import { CommentModel } from '../models/comment.model'
 import { AuthRequest } from '../../auth/types/auth.types'
 import { Types, Document } from 'mongoose'
+import { LikeModel } from '../models/like.model'
 
 // Create temp upload directory
 const TEMP_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'temp')
@@ -383,5 +384,61 @@ const addReplyHandler: RequestHandler = async (req, res, next) => {
 
 // Add route for replies
 router.post('/:videoId/comments/:commentId/replies', typedAuthMiddleware, addReplyHandler)
+
+// Add these handlers
+const toggleLikeHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { videoId } = req.params
+    const userId = (req as AuthRequest).user.id
+    const { type } = req.body // 'like' or 'dislike'
+
+    const video = await VideoModel.findById(videoId)
+    if (!video) {
+      res.status(404).json({ error: 'Video not found' })
+      return
+    }
+
+    // Check if user has already liked/disliked
+    const existingLike = await LikeModel.findOne({ userId, videoId })
+
+    if (existingLike) {
+      if (existingLike.type === type) {
+        // If same type, remove the like/dislike
+        await LikeModel.deleteOne({ _id: existingLike._id })
+        await VideoModel.findByIdAndUpdate(videoId, {
+          $inc: { [type === 'like' ? 'likes' : 'dislikes']: -1 }
+        })
+      } else {
+        // If different type, update the type
+        existingLike.type = type
+        await existingLike.save()
+        await VideoModel.findByIdAndUpdate(videoId, {
+          $inc: {
+            [type === 'like' ? 'likes' : 'dislikes']: 1,
+            [type === 'like' ? 'dislikes' : 'likes']: -1
+          }
+        })
+      }
+    } else {
+      // Create new like/dislike
+      await LikeModel.create({ userId, videoId, type })
+      await VideoModel.findByIdAndUpdate(videoId, {
+        $inc: { [type === 'like' ? 'likes' : 'dislikes']: 1 }
+      })
+    }
+
+    const updatedVideo = await VideoModel.findById(videoId)
+    res.json({
+      likes: updatedVideo?.likes || 0,
+      dislikes: updatedVideo?.dislikes || 0,
+      status: existingLike?.type === type ? null : type
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// Add the routes
+router.post('/:videoId/like', typedAuthMiddleware, toggleLikeHandler)
 
 export default router 

@@ -16,6 +16,8 @@ interface IVideo {
     height: number
   }
   views: number
+  likes: number
+  dislikes: number
 }
 
 const videoSchema = new Schema<IVideo>(
@@ -37,6 +39,14 @@ const videoSchema = new Schema<IVideo>(
       default: 'processing'
     },
     views: {
+      type: Number,
+      default: 0
+    },
+    likes: {
+      type: Number,
+      default: 0
+    },
+    dislikes: {
       type: Number,
       default: 0
     }

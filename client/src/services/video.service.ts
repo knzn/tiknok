@@ -205,21 +205,11 @@ export const VideoService = {
   },
 
   async likeVideo(id: string): Promise<void> {
-    try {
-      await api.post(`/api/videos/${id}/likes`)
-    } catch (error) {
-      console.error('Error liking video:', error)
-      throw error
-    }
+    await api.post(`/videos/${id}/like`)
   },
 
   async unlikeVideo(id: string): Promise<void> {
-    try {
-      await api.delete(`/api/videos/${id}/likes`)
-    } catch (error) {
-      console.error('Error unliking video:', error)
-      throw error
-    }
+    await api.delete(`/videos/${id}/like`)
   },
 
   async getVideoComments(videoId: string): Promise<Comment[]> {
@@ -307,5 +297,19 @@ export const VideoService = {
       console.error(`Error fetching ${type} videos:`, error)
       throw error
     }
+  },
+
+  async toggleLike(videoId: string, type: 'like' | 'dislike'): Promise<{
+    likes: number
+    dislikes: number
+    status: 'like' | 'dislike' | null
+  }> {
+    const { data } = await api.post(`/videos/${videoId}/like`, { type })
+    return data
+  },
+
+  async getLikeStatus(videoId: string): Promise<{ status: 'like' | 'dislike' | null }> {
+    const { data } = await api.get(`/videos/${videoId}/like-status`)
+    return data
   }
 }
