@@ -3,6 +3,24 @@ import { UserModel } from '../models/user.model'
 import { AuthRequest } from '../../auth/middleware/auth.middleware'
 
 export class UserController {
+  static async getProfile(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user.id
+      
+      const user = await UserModel.findById(userId)
+        .select('-password')
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' })
+      }
+
+      res.json(user)
+    } catch (error) {
+      console.error('Get profile error:', error)
+      res.status(500).json({ error: 'Failed to get profile' })
+    }
+  }
+
   static async updateProfile(req: AuthRequest, res: Response) {
     try {
       const userId = req.user.id

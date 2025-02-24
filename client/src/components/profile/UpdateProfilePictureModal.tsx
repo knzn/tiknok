@@ -17,6 +17,7 @@ export function UpdateProfilePictureModal({ isOpen, onClose }: UpdateProfilePict
   const [isLoading, setIsLoading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [imageVersion, setImageVersion] = useState(0)
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -55,14 +56,11 @@ export function UpdateProfilePictureModal({ isOpen, onClose }: UpdateProfilePict
         throw new Error('Failed to update profile picture')
       }
 
-      // Force a refresh of the image by adding a timestamp
-      const timestamp = new Date().getTime()
-      const updatedUser = {
-        ...response.data,
-        profilePicture: `${response.data.profilePicture}?t=${timestamp}`
-      }
-
-      await updateUser(updatedUser)
+      // Update user with the new profile data from server
+      await updateUser({
+        ...user,
+        ...response.data
+      })
 
       toast({
         title: 'Success',
@@ -73,8 +71,7 @@ export function UpdateProfilePictureModal({ isOpen, onClose }: UpdateProfilePict
       onClose()
 
       // Force reload of the image
-      const img = new Image()
-      img.src = updatedUser.profilePicture
+      setImageVersion(prev => prev + 1)
     } catch (error) {
       console.error('Failed to update profile picture:', error)
       toast({

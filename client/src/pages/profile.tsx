@@ -5,6 +5,7 @@ import { ProfileSetupModal } from '../components/profile/ProfileSetupModal'
 import { EditProfileModal } from '../components/profile/EditProfileModal'
 import { UpdateProfilePictureModal } from '../components/profile/UpdateProfilePictureModal'
 import { Camera } from 'lucide-react'
+import { api } from '../lib/api'
 
 // Add this helper function at the top of the file
 const addCacheBuster = (url: string) => {
@@ -20,18 +21,41 @@ const getImageUrl = (url: string | undefined) => {
 };
 
 export function ProfilePage() {
-  const { user } = useAuthStore()
+  const { user, updateUser } = useAuthStore()
   const [showSetupModal, setShowSetupModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showProfilePictureModal, setShowProfilePictureModal] = useState(false)
   const [imageVersion, setImageVersion] = useState(0)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Check if profile needs setup when component mounts
+  // Fetch fresh user data when component mounts
   useEffect(() => {
-    if (user && !user.gamefarmName) {
+    const fetchUserProfile = async () => {
+      try {
+        setIsLoading(true)
+        const response = await api.get('/users/profile')
+        if (response.data) {
+          await updateUser({
+            ...user,
+            ...response.data
+          })
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchUserProfile()
+  }, [])
+
+  // Show setup modal only on first visit when gamefarmName is not set
+  useEffect(() => {
+    if (!isLoading && user && !user.gamefarmName) {
       setShowSetupModal(true)
     }
-  }, [user])
+  }, [user, isLoading])
 
   useEffect(() => {
     if (user?.profilePicture) {

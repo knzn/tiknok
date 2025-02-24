@@ -67,4 +67,13 @@ router.patch('/profile', authMiddleware, updateProfileHandler)
 router.post('/profile/picture', authMiddleware, upload.single('profilePicture'), updateProfilePictureHandler)
 router.post('/profile/cover', authMiddleware, upload.single('coverPhoto'), updateCoverPhotoHandler)
 
+// Add this new route
+router.get('/profile', authMiddleware, async (req, res, next) => {
+  try {
+    await UserController.getProfile(req as AuthRequest, res)
+  } catch (error) {
+    next(error)
+  }
+})
+
 export { router as userRoutes } 

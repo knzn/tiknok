@@ -31,10 +31,19 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     e.preventDefault()
     try {
       setIsLoading(true)
+      // First save to database
+      const response = await api.patch('/users/profile', formData)
+
+      if (!response.data) {
+        throw new Error('Failed to update profile')
+      }
+
+      // Then update local state
       await updateUser({
         ...user,
-        ...formData
+        ...response.data
       })
+
       toast({
         title: 'Success',
         description: 'Profile updated successfully',
