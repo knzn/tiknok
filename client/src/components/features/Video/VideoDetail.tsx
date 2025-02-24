@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Pencil, Trash2, ThumbsUp, ThumbsDown, MoreVertical, Users, Bell, MessageSquare } from 'lucide-react'
@@ -56,6 +56,9 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const [likeStatus, setLikeStatus] = useState<'like' | 'dislike' | null>(null)
   const [likesCount, setLikesCount] = useState(0)
   const [dislikesCount, setDislikesCount] = useState(0)
+  const [hasViewed, setHasViewed] = useState(false)
+  const videoStartTimeRef = useRef<number | null>(null)
+  const [viewCount, setViewCount] = useState<number>(0)
 
   // Query
   const { data: video, isLoading: isLoadingVideo, error } = useQuery<Video>({
@@ -108,6 +111,57 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
 
     fetchLikeStatus()
   }, [user, videoId])
+
+  // Update initial view count when video data loads
+  useEffect(() => {
+    if (video?.views) {
+      setViewCount(video.views)
+    }
+  }, [video])
+
+  // Update the view handling effect
+  useEffect(() => {
+    if (!video || hasViewed) return
+
+    const handleVideoView = async () => {
+      try {
+        const updatedViews = await VideoService.addView(videoId)
+        setViewCount(updatedViews)
+        setHasViewed(true)
+      } catch (error) {
+        console.error('Failed to record view:', error)
+      }
+    }
+
+    const checkViewDuration = (duration: number) => {
+      if (!videoStartTimeRef.current) {
+        videoStartTimeRef.current = Date.now()
+        return
+      }
+
+      const viewDuration = (Date.now() - videoStartTimeRef.current) / 1000
+      const requiredDuration = duration <= 10 ? duration * 0.5 : 5 // 50% for short videos, 5s for longer ones
+
+      if (viewDuration >= requiredDuration) {
+        handleVideoView()
+      }
+    }
+
+    // Add event listeners to video element with proper function references
+    const videoElement = document.querySelector('video')
+    if (videoElement) {
+      const duration = videoElement.duration
+      const boundCheckViewDuration = () => checkViewDuration(duration)
+
+      videoElement.addEventListener('timeupdate', boundCheckViewDuration)
+      videoElement.addEventListener('ended', boundCheckViewDuration)
+
+      return () => {
+        videoElement.removeEventListener('timeupdate', boundCheckViewDuration)
+        videoElement.removeEventListener('ended', boundCheckViewDuration)
+      }
+    }
+  }, [video, hasViewed, videoId])
 
   // Handlers
   const handleEdit = () => {
@@ -394,7 +448,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
             {/* Video Info */}
             <div className="mt-4 bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>{video.views?.toLocaleString() || '0'} views</span>
+                <span>{viewCount.toLocaleString()} views</span>
                 <span>•</span>
                 <span>{new Date(video.createdAt).toLocaleDateString()}</span>
               </div>

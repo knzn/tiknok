@@ -1,5 +1,6 @@
 import { api } from '../lib/api'
-import type { Video } from '@/types/video.types'
+import type { Video } from '../types/video.types'
+import type { Comment, ApiComment } from '../types/comment.types'
 import axios from 'axios'
 
 // Move Video interface to a local definition for now to fix the import error
@@ -55,17 +56,7 @@ interface VideoUploadResponse {
   aspectRatio?: number
 }
 
-interface ApiComment {
-  _id: string
-  content: string
-  userId: {
-    _id: string
-    username: string
-    profilePicture?: string
-  }
-  createdAt: string
-}
-
+// Helper function to transform API response to frontend model
 const transformComment = (comment: ApiComment): Comment => ({
   id: comment._id,
   content: comment.content,
@@ -74,7 +65,9 @@ const transformComment = (comment: ApiComment): Comment => ({
     username: comment.userId.username,
     profilePicture: comment.userId.profilePicture
   },
-  createdAt: comment.createdAt
+  createdAt: comment.createdAt,
+  replies: comment.replies?.map(transformComment),
+  parentId: comment.parentId
 })
 
 export const VideoService = {
@@ -222,16 +215,7 @@ export const VideoService = {
   async getVideoComments(videoId: string): Promise<Comment[]> {
     try {
       const { data } = await api.get<ApiComment[]>(`/videos/${videoId}/comments`)
-      return data.map(comment => ({
-        id: comment._id,
-        content: comment.content,
-        userId: {
-          id: comment.userId._id,
-          username: comment.userId.username,
-          profilePicture: comment.userId.profilePicture
-        },
-        createdAt: comment.createdAt
-      }))
+      return data.map(transformComment)
     } catch (error) {
       console.error('Error fetching comments:', error)
       return []
@@ -239,39 +223,15 @@ export const VideoService = {
   },
 
   async addComment(videoId: string, content: string): Promise<Comment> {
-    const { data } = await api.post(`/videos/${videoId}/comments`, { content })
-    return {
-      id: data._id,
-      content: data.content,
-      userId: {
-        id: data.userId._id,
-        username: data.userId.username,
-        profilePicture: data.userId.profilePicture
-      },
-      createdAt: data.createdAt
-    }
+    const { data } = await api.post<ApiComment>(`/videos/${videoId}/comments`, { content })
+    return transformComment(data)
   },
 
   async updateComment(videoId: string, commentId: string, content: string): Promise<Comment> {
-    try {
-      const { data } = await api.patch(`/videos/${videoId}/comments/${commentId}`, { 
-        content: content.trim() 
-      })
-      
-      return {
-        id: data._id || data.id,
-        content: data.content,
-        userId: {
-          id: data.userId._id || data.userId.id,
-          username: data.userId.username,
-          profilePicture: data.userId.profilePicture
-        },
-        createdAt: data.createdAt
-      }
-    } catch (error) {
-      console.error('Error in updateComment:', error)
-      throw error
-    }
+    const { data } = await api.patch<ApiComment>(`/videos/${videoId}/comments/${commentId}`, { 
+      content: content.trim() 
+    })
+    return transformComment(data)
   },
 
   async deleteComment(videoId: string, commentId: string): Promise<void> {
@@ -282,11 +242,6 @@ export const VideoService = {
       console.error('Error deleting comment:', error)
       throw error
     }
-  },
-
-  handleCancelEdit: () => {
-    setEditingCommentId(null)
-    setEditContent('')
   },
 
   async deleteVideo(videoId: string): Promise<void> {
@@ -320,5 +275,23 @@ export const VideoService = {
   }> {
     const { data } = await api.get(`/videos/${videoId}/like`)
     return data
+  },
+
+  async addView(videoId: string): Promise<number> {
+    try {
+      const { data } = await api.post<{ message: string; views: number }>(`/videos/${videoId}/view`)
+      return data.views
+    } catch (error) {
+      console.error('Failed to record view:', error)
+      throw error
+    }
+  },
+
+  async addReply(videoId: string, commentId: string, content: string): Promise<Comment> {
+    const { data } = await api.post<ApiComment>(
+      `/videos/${videoId}/comments/${commentId}/replies`,
+      { content }
+    )
+    return transformComment(data)
   }
 } 
