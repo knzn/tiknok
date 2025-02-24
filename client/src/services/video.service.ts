@@ -306,5 +306,19 @@ export const VideoService = {
       console.error('Error updating video:', error)
       throw error
     }
+  },
+
+  async toggleLike(videoId: string, type: 'like' | 'dislike'): Promise<{ likes: number, dislikes: number }> {
+    const { data } = await api.post(`/videos/${videoId}/like`, { type })
+    return data
+  },
+
+  async getLikeStatus(videoId: string): Promise<{ 
+    userLike: 'like' | 'dislike' | null
+    likes: number
+    dislikes: number 
+  }> {
+    const { data } = await api.get(`/videos/${videoId}/like`)
+    return data
   }
 } 

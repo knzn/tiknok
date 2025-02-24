@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { Pencil, Trash2, ThumbsUp, ThumbsDown, MoreVertical, Users, Bell, MessageSquare } from 'lucide-react'
@@ -32,6 +32,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { followUser, unfollowUser, checkFollowStatus } from '@/lib/api'
 
 interface VideoDetailProps {
   videoId: string
@@ -50,6 +51,11 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [likeStatus, setLikeStatus] = useState<'like' | 'dislike' | null>(null)
+  const [likesCount, setLikesCount] = useState(0)
+  const [dislikesCount, setDislikesCount] = useState(0)
 
   // Query
   const { data: video, isLoading: isLoadingVideo, error } = useQuery<Video>({
@@ -60,6 +66,48 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   // Check if user is owner
   // const isOwner = user?.id === video?.userId?._id || user?.id === video?.userId?.id
   const isOwner = user?.id === video?.userId._id
+
+  // Add effect to check follow status and get followers count
+  useEffect(() => {
+    const checkFollow = async () => {
+      if (!isOwner && user && video?.userId?._id) {
+        try {
+          const status = await checkFollowStatus(video.userId._id)
+          setIsFollowing(status)
+          setFollowersCount(video.userId.followersCount || 0)
+        } catch (error) {
+          console.error('Failed to check follow status:', error)
+        }
+      }
+    }
+
+    checkFollow()
+  }, [isOwner, user, video])
+
+  // Update the useEffect to set initial followers count
+  useEffect(() => {
+    if (video?.userId?.followersCount) {
+      setFollowersCount(video.userId.followersCount)
+    }
+  }, [video])
+
+  // Add useEffect to fetch initial like status
+  useEffect(() => {
+    const fetchLikeStatus = async () => {
+      if (user && videoId) {
+        try {
+          const status = await VideoService.getLikeStatus(videoId)
+          setLikeStatus(status.userLike)
+          setLikesCount(status.likes)
+          setDislikesCount(status.dislikes)
+        } catch (error) {
+          console.error('Failed to fetch like status:', error)
+        }
+      }
+    }
+
+    fetchLikeStatus()
+  }, [user, videoId])
 
   // Handlers
   const handleEdit = () => {
@@ -93,7 +141,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
         description: "Video updated successfully"
       })
     } catch (error) {
-      console.error('Failed to update video:', error)
       toast({
         title: "Error",
         description: "Failed to update video",
@@ -117,7 +164,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
       // Navigate back to home page
       navigate('/')
     } catch (error) {
-      console.error('Failed to delete video:', error)
       toast({
         title: "Error",
         description: "Failed to delete video",
@@ -126,6 +172,70 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
     } finally {
       setIsLoading(false)
       setShowDeleteDialog(false)
+    }
+  }
+
+  // Update the handleFollow/handleUnfollow to update the count
+  const handleFollow = async () => {
+    if (!video?.userId?._id) return
+    try {
+      await followUser(video.userId._id)
+      setIsFollowing(true)
+      setFollowersCount(prev => prev + 1)
+      toast({
+        title: "Success",
+        description: "Successfully followed user"
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to follow user",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleUnfollow = async () => {
+    if (!video?.userId?._id) return
+    try {
+      await unfollowUser(video.userId._id)
+      setIsFollowing(false)
+      setFollowersCount(prev => prev - 1)
+      toast({
+        title: "Success",
+        description: "Successfully unfollowed user"
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to unfollow user",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Add handler
+  const handleLikeAction = async (type: 'like' | 'dislike') => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please login to like/dislike videos",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const result = await VideoService.toggleLike(videoId, type)
+      setLikesCount(result.likes)
+      setDislikesCount(result.dislikes)
+      setLikeStatus(prev => prev === type ? null : type)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update like status",
+        variant: "destructive"
+      })
     }
   }
 
@@ -140,7 +250,6 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
   if (!video) {
     return <div>Video not found</div>
   }
-  console.log(video)
   return (
     <div className="max-w-[1280px] mx-auto bg-white">
       {/* Video Player Container */}
@@ -190,7 +299,7 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={video.userId.avatarUrl} alt={video.userId.username} />
+                    <AvatarImage src={video.userId.profilePicture} />
                     <AvatarFallback>{video.userId.username[0]}</AvatarFallback>
                   </Avatar>
                   <div>
@@ -203,28 +312,47 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                       </Link>
                     </h3>
                     <p className="text-sm text-gray-600">
-                      {video.userId.subscribers?.toLocaleString() || '0'} subscribers
+                      {followersCount.toLocaleString()} Followers
                     </p>
                   </div>
                 </div>
                 
-                {!isOwner && (
-                  <Button variant="secondary" className="rounded-full hover:bg-gray-100">
-                    <Bell className="h-4 w-4 mr-2" />
-                    Subscribe
+                {!isOwner && user && (
+                  <Button
+                    variant={isFollowing ? "outline" : "default"}
+                    className="rounded-full hover:bg-gray-100"
+                    onClick={isFollowing ? handleUnfollow : handleFollow}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    {isFollowing ? "Following" : "Follow"}
                   </Button>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
                 <div className="bg-gray-100 rounded-full flex items-center">
-                  <Button variant="outline" className="rounded-l-full hover:bg-gray-200">
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "rounded-l-full hover:bg-gray-200",
+                      likeStatus === 'like' && "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                    onClick={() => handleLikeAction('like')}
+                  >
                     <ThumbsUp className="mr-2 h-4 w-4" />
-                    {video.likes?.toLocaleString() || '0'}
+                    {likesCount.toLocaleString()}
                   </Button>
                   <Separator orientation="vertical" className="h-6" />
-                  <Button variant="outline" className="rounded-r-full hover:bg-gray-200">
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "rounded-r-full hover:bg-gray-200",
+                      likeStatus === 'dislike' && "bg-primary text-primary-foreground hover:bg-primary/90"
+                    )}
+                    onClick={() => handleLikeAction('dislike')}
+                  >
                     <ThumbsDown className="h-4 w-4" />
+                    {dislikesCount.toLocaleString()}
                   </Button>
                 </div>
 
