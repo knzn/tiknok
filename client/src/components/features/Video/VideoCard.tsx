@@ -15,12 +15,14 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
   const firstLetter = username.charAt(0).toUpperCase()
 
   return (
-    <Link 
-      to={`/video/${video.id}`}
-      className="video-card"
+    <div 
+      className="video-card group cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={onVideoClick}
+      onClick={() => {
+        if (onVideoClick) onVideoClick()
+        else window.location.href = `/video/${video.id}`
+      }}
     >
       {/* Video Thumbnail */}
       <img 
@@ -48,8 +50,16 @@ export const VideoCard = ({ video, onVideoClick }: VideoCardProps) => {
         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
           {firstLetter}
         </div>
-        <span className="text-white font-medium">@{username}</span>
+        <Link 
+          to={`/profile/${username}`}
+          className="text-white font-medium hover:underline"
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+        >
+          @{username}
+        </Link>
       </div>
-    </Link>
+    </div>
   )
 } 

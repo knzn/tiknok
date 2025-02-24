@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Pencil, Trash2, ThumbsUp, ThumbsDown, MoreVertical, Users, Bell, MessageSquare } from 'lucide-react'
 import { VideoService } from '@/services/video.service'
 import { VideoPlayer } from './VideoPlayer'
@@ -194,7 +194,14 @@ export function VideoDetail({ videoId }: VideoDetailProps) {
                     <AvatarFallback>{video.userId.username[0]}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="font-medium text-gray-900">{video.userId.username}</h3>
+                    <h3 className="font-medium text-gray-900">
+                      <Link 
+                        to={`/profile/${video.userId.username}`} 
+                        className="hover:underline"
+                      >
+                        {video.userId.username}
+                      </Link>
+                    </h3>
                     <p className="text-sm text-gray-600">
                       {video.userId.subscribers?.toLocaleString() || '0'} subscribers
                     </p>

@@ -1,3 +1,4 @@
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useState, useEffect } from 'react'
 import { Button } from '../components/ui/button'
@@ -21,47 +22,96 @@ const getImageUrl = (url: string | undefined) => {
 };
 
 export function ProfilePage() {
+  const { username } = useParams<{ username: string }>()
+  const navigate = useNavigate()
   const { user, updateUser } = useAuthStore()
+  const [profileData, setProfileData] = useState<any>(null)
   const [showSetupModal, setShowSetupModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showProfilePictureModal, setShowProfilePictureModal] = useState(false)
   const [imageVersion, setImageVersion] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Fetch fresh user data when component mounts
+  const isOwnProfile = user?.username === username
+
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchProfile = async () => {
       try {
         setIsLoading(true)
-        const response = await api.get('/users/profile')
-        if (response.data) {
-          await updateUser({
-            ...user,
-            ...response.data
-          })
+        setError(null)
+        
+        if (isOwnProfile) {
+          // Fetch personal profile
+          const response = await api.get('/users/profile')
+          if (response.data) {
+            await updateUser({
+              ...user,
+              ...response.data
+            })
+            setProfileData(response.data)
+          }
+        } else {
+          // Fetch public profile
+          const response = await api.get(`/users/profile/${username}`)
+          setProfileData(response.data)
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to fetch profile:', error)
+        setError(error?.response?.data?.error || 'Failed to load profile')
+        if (error?.response?.status === 404) {
+          setTimeout(() => {
+            navigate('/')
+          }, 2000)
+        }
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchUserProfile()
-  }, [])
+    if (username) {
+      fetchProfile()
+    }
+  }, [username, isOwnProfile, navigate])
 
   // Show setup modal only on first visit when gamefarmName is not set
   useEffect(() => {
-    if (!isLoading && user && !user.gamefarmName) {
+    if (!isLoading && isOwnProfile && user && !user.gamefarmName) {
       setShowSetupModal(true)
     }
-  }, [user, isLoading])
+  }, [user, isLoading, isOwnProfile])
 
   useEffect(() => {
     if (user?.profilePicture) {
       setImageVersion(prev => prev + 1)
     }
   }, [user?.profilePicture])
+
+  const displayData = isOwnProfile ? user : profileData
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state with redirect message
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-destructive mb-2">Profile Not Found</h2>
+          <p className="text-muted-foreground">Redirecting to home page...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -71,9 +121,9 @@ export function ProfilePage() {
         <div className="flex flex-col items-center mb-8">
           <div className="relative">
             <div className="w-48 h-48 rounded-full border-4 border-background bg-gray-200 overflow-hidden mb-4">
-              {user?.profilePicture ? (
+              {displayData?.profilePicture ? (
                 <img
-                  src={getImageUrl(user.profilePicture)}
+                  src={displayData.profilePicture}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   key={imageVersion}
@@ -89,48 +139,52 @@ export function ProfilePage() {
                 </div>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="absolute bottom-6 right-0 rounded-full"
-              onClick={() => setShowProfilePictureModal(true)}
-            >
-              Edit
-            </Button>
+            {isOwnProfile && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute bottom-6 right-0 rounded-full"
+                onClick={() => setShowProfilePictureModal(true)}
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
-          {/* Edit Profile Button */}
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setShowEditModal(true)}
-          >
-            Edit Profile
-          </Button>
+          {/* Edit Profile Button - Only show for own profile */}
+          {isOwnProfile && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setShowEditModal(true)}
+            >
+              Edit Profile
+            </Button>
+          )}
         </div>
 
         {/* Profile Details Card */}
         <div className="bg-card rounded-xl p-8 shadow-lg">
           <div className="space-y-8">
             <div className="text-center">
-              <h1 className="text-3xl font-bold">{user?.gamefarmName || "My Gamefarm"}</h1>
-              <p className="text-lg text-muted-foreground mt-2">username: {user?.username}</p>
+              <h1 className="text-3xl font-bold">{displayData?.gamefarmName || "Gamefarm"}</h1>
+              <p className="text-lg text-muted-foreground mt-2">@{displayData?.username}</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div>
                 <h2 className="text-xl font-semibold">Location</h2>
-                <p className="text-muted-foreground mt-2">{user?.address || "Not specified"}</p>
+                <p className="text-muted-foreground mt-2">{displayData?.address || "Not specified"}</p>
               </div>
               <div>
                 <h2 className="text-xl font-semibold">Contact</h2>
-                <p className="text-muted-foreground mt-2">{user?.contactNumber || "Not specified"}</p>
+                <p className="text-muted-foreground mt-2">{displayData?.contactNumber || "Not specified"}</p>
               </div>
               <div>
                 <h2 className="text-xl font-semibold">Facebook</h2>
                 <p className="text-muted-foreground mt-2">
-                  {user?.facebookProfile ? (
-                    <a href={user.facebookProfile} target="_blank" rel="noopener noreferrer" 
+                  {displayData?.facebookProfile ? (
+                    <a href={displayData.facebookProfile} target="_blank" rel="noopener noreferrer" 
                        className="text-primary hover:underline">
                       Visit Facebook Profile
                     </a>
@@ -160,19 +214,23 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Modals */}
-      <ProfileSetupModal 
-        isOpen={showSetupModal} 
-        onClose={() => setShowSetupModal(false)} 
-      />
-      <EditProfileModal
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-      />
-      <UpdateProfilePictureModal
-        isOpen={showProfilePictureModal}
-        onClose={() => setShowProfilePictureModal(false)}
-      />
+      {/* Modals - Only render for own profile */}
+      {isOwnProfile && (
+        <>
+          <ProfileSetupModal
+            isOpen={showSetupModal}
+            onClose={() => setShowSetupModal(false)}
+          />
+          <EditProfileModal
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+          />
+          <UpdateProfilePictureModal
+            isOpen={showProfilePictureModal}
+            onClose={() => setShowProfilePictureModal(false)}
+          />
+        </>
+      )}
     </div>
   )
 } 

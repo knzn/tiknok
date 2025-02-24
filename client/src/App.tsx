@@ -34,14 +34,7 @@ function App() {
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/profile" 
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              } 
-            />
+            <Route path="/profile/:username" element={<ProfilePage />} />
             <Route path="/video/:id" element={<VideoPage />} />
             <Route path="/shorts/:id" element={<ShortsPage />} />
             <Route path="*" element={<NotFoundPage />} />

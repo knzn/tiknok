@@ -28,4 +28,10 @@ api.interceptors.response.use(
     }
     return Promise.reject(error)
   }
-) 
+)
+
+// Add this new method to your API service
+export const getPublicProfile = async (username: string) => {
+  const response = await api.get(`/users/profile/${username}`)
+  return response.data
+} 
