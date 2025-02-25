@@ -13,6 +13,7 @@ import { VideoProcessingService } from './services/video-processing.service'
 import morgan from 'morgan'
 import { apiLimiter } from './middleware/rate-limit'
 import { corsMiddleware } from './middleware/cors.middleware'
+import { QueueService } from './services/queue.service'
 
 const app = express()
 
@@ -27,6 +28,9 @@ process.on('unhandledRejection', (error) => {
 
 // Initialize video processing service
 VideoProcessingService.init().catch(console.error)
+
+// Initialize queue service
+QueueService.init()
 
 // Middleware
 app.use(corsMiddleware)

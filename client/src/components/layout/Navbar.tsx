@@ -38,7 +38,7 @@ export function Navbar() {
               </Button>
 
               <Button asChild variant="ghost">
-                <Link to="/profile" className="flex items-center space-x-2">
+                <Link to={`/profile/${user?.username}`} className="flex items-center space-x-2">
                   <UserIcon className="w-4 h-4" />
                   <span>{user?.username}</span>
                 </Link>

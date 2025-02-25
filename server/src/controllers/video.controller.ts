@@ -4,6 +4,7 @@ import { promises as fs } from 'fs'
 import { ObjectId } from 'mongodb'
 import { VideoModel } from '../models/video.model'
 import { AuthRequest } from '../middleware/auth'
+import { QueueService } from '../services/queue.service'
 
 export class VideoController {
   static async uploadVideo(req: AuthRequest, res: Response) {
@@ -36,43 +37,14 @@ export class VideoController {
         processingStage: 'initializing'
       })
 
+      // Add to processing queue instead of direct processing
+      await QueueService.addVideoJob(videoId, req.file.path)
+
       // Return the video immediately
       res.status(201).json({
         ...video.toJSON(),
         id: video._id
       })
-
-      // Process video in background
-      try {
-        // Update to metadata stage
-        await VideoModel.findByIdAndUpdate(videoId, {
-          processingStage: 'metadata'
-        })
-
-        const processedVideo = await VideoProcessingService.processVideo(req.file.path, videoId)
-
-        // Update with final info
-        await VideoModel.findByIdAndUpdate(videoId, {
-          hlsUrl: `/hls/${videoId}/master.m3u8`,
-          thumbnailUrl: `/thumbnails/${videoId}.jpg`,
-          duration: processedVideo.duration,
-          resolution: processedVideo.resolution,
-          status: 'ready',
-          processingStage: 'ready',
-          processingProgress: 100
-        })
-
-        // Cleanup
-        await fs.unlink(req.file.path)
-        console.log('Video processing completed:', videoId)
-      } catch (error) {
-        console.error('Video processing failed:', error)
-        await VideoModel.findByIdAndUpdate(videoId, {
-          status: 'failed',
-          processingStage: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
     } catch (error) {
       if (videoId) {
         await VideoModel.findByIdAndUpdate(videoId, {

@@ -6,6 +6,8 @@ export const config = {
   mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/video-app',
   jwtSecret: process.env.JWT_SECRET || 'default-secret-key',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisHost: process.env.REDIS_HOST || 'localhost',
+  redisPort: process.env.REDIS_PORT || 6379,
   uploadDir: 'uploads',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   baseUrl: process.env.BASE_URL || 'http://localhost:3000',
